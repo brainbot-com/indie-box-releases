@@ -1,4 +1,23 @@
 {
-  "apps": [],
+  "apps": [
+    {
+      "audience": [
+        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
+      ],
+      "description": "creditreform:agents",
+      "icon": "message-chatbot",
+      "id": "crefo-chat",
+      "name": "creditreform:agents",
+      "scope": "private",
+      "versions": [
+        {
+          "compose_path": "apps/crefo-chat/1.0.0/compose.yml",
+          "compose_sha256": "db3ea192c1e90cc264962d0bded79ae7f358a746fc97791cf1586a1f2e880458",
+          "released_at": "2026-08-11T00:00:00Z",
+          "version": "1.0.0"
+        }
+      ]
+    }
+  ],
   "schema_version": 1
 }
