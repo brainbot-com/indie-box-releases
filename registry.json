@@ -2,6 +2,46 @@
   "apps": [
     {
       "audience": [
+        "2fafe54c6f1fa347636fd2142015313bcf19facc77d1e72d591feedb5d09c234"
+      ],
+      "description": "Private chat and coding agents over the on-box models, the shared wiki and the Onyx knowledge index.",
+      "icon": "robot",
+      "id": "agent-command",
+      "name": "lightforce agent command",
+      "scope": "private",
+      "variables": [
+        {
+          "description": "64 hex chars encrypting conversation titles, messages and agent transcripts at rest. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\". Keep it: changing it makes existing conversations unreadable.",
+          "label": "Chat encryption key",
+          "name": "INDIECHAT_ENCRYPTION_KEY",
+          "secret": true
+        },
+        {
+          "description": "Enables web search for chat, agents and routines. Set here rather than in the app's own settings: a key entered there lives in one browser and never reaches agent turns. Leave empty to disable web search.",
+          "label": "Web search key (Serper)",
+          "name": "SERPER_KEY",
+          "required": false,
+          "secret": true
+        },
+        {
+          "description": "Read token for the search app's /api/sources, used only to show which connectors feed the index on the Brain page. Leave empty to hide those figures.",
+          "label": "Onyx search token",
+          "name": "ONYX_SEARCH_TOKEN",
+          "required": false,
+          "secret": true
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/agent-command/1.0.0/compose.yml",
+          "compose_sha256": "9b17869ec2afd3f1bf252fccafd6bb91a54f4d644951a9d9192a06f6c9ebc6d0",
+          "released_at": "2026-08-12T00:00:00Z",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "audience": [
         "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
       ],
       "description": "Creditreform chat, Insights dashboard and read-only revenue MCP as one app.",
