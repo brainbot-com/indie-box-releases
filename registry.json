@@ -69,15 +69,14 @@
           "secret": true
         },
         {
-          "description": "Shared secret that enables the agent Datenpflege write API. Leave empty to keep those write tools disabled.",
+          "description": "Shared secret between the Datenpflege MCP sidecar and the Insights dashboard, which is the only writer of the customer DB. Generate any long random string; it never leaves the box.",
           "label": "Datenpflege write token",
           "name": "DATAOPS_TOKEN",
-          "required": false,
           "secret": true
         },
         {
-          "description": "Bearer token required on every revenue-MCP request. Leave empty to disable MCP authentication.",
-          "label": "Revenue MCP token",
+          "description": "Bearer token required on every revenue-MCP and Datenpflege-MCP request. Leave empty to disable MCP authentication.",
+          "label": "MCP token",
           "name": "MCP_TOKEN",
           "required": false,
           "secret": true
@@ -95,6 +94,12 @@
           "compose_sha256": "1cf51fd7e0444383dc6a44322753cfab9d9d36fe8001d2df68d4c7d59d5cdde0",
           "released_at": "2026-08-11T00:00:00Z",
           "version": "1.0.1"
+        },
+        {
+          "compose_path": "apps/crefo-chat/1.1.1/compose.yml",
+          "compose_sha256": "5c9d3922fa53f8c0005c56a7323384112342cd2064132b1cd013ae1245b583e5",
+          "released_at": "2026-08-13T00:00:00Z",
+          "version": "1.1.1"
         }
       ]
     }
