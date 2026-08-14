@@ -55,6 +55,12 @@
           "compose_sha256": "75cb28a10c2c04050ea75a1185aec26fa39bc8e1fa871df0f35b7107d59dc459",
           "released_at": "2026-08-14T09:20:00Z",
           "version": "1.2.0"
+        },
+        {
+          "compose_path": "apps/agent-command/1.3.0/compose.yml",
+          "compose_sha256": "6aa1659c6a0eb72525d6106d6d4931edff16e04f06cffc13350829b476494dc2",
+          "released_at": "2026-08-14T09:40:00Z",
+          "version": "1.3.0"
         }
       ]
     },
