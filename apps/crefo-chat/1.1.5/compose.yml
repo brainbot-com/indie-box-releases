@@ -1,0 +1,295 @@
+# crefo-chat on the Indie Box: the PUBLISHED indie-chat image + this repo's
+# config/. The whole Creditreform stack -- the chat, the Insights dashboard and
+# the two MCP sidecars -- installs as ONE app:
+#
+#   indiebox/install.sh crefo-chat indiebox/crefo-chat.compose.yml
+#
+# An app gets exactly ONE gateway route (the labelled service), so a small Caddy
+# front is the labelled service and fans out by path on one origin:
+#
+#   /             -> crefo-chat-server:3000   (the chat)
+#   /insights/*   -> crefo-insights:3060      (dashboard; prefix stripped,
+#                                              app.py re-adds it via URL_PREFIX)
+#
+# Upgrading the chat is a TAG CHANGE. There is no patch to re-cut: the image is
+# stock indie-chat with config/ copied in, and a malformed or too-new config
+# fails the boot loudly rather than silently reverting to indie.chat defaults.
+# See chat-crefo/UPGRADING.md.
+#
+# Every image below is PINNED to this app's release version -- the tag defaults
+# are written by .github/workflows/release.yml together with the
+# indiebox.app.version label, so installing this file always gets that release's
+# images. Do not hand-edit them; `indiebox/pin-images.sh --check` guards the
+# shape they have to keep. Upgrading a box is installing a newer release's copy
+# of this file (`git show v1.2.0:indiebox/crefo-chat.compose.yml`), and setting
+# any CREFO_*_TAG in the box's shared .env overrides the pin for that one
+# component -- which is how :next gets tried, and how a single service is rolled
+# back.
+#
+# Before installing (see indiebox/README.md):
+#   * place the customer DB at <SECURE_STORAGE_DIR|DATA_DIR>/crefo/crefo-customers.duckdb
+#   * supply the app variables the box prompts for on install/update -- they are
+#     declared as indiebox.app.var.* labels below and stored in the box's shared
+#     .env. CREFO_CHAT_ENCRYPTION_KEY and DATAOPS_TOKEN are required; MCP_TOKEN
+#     is optional. (A hand-run `docker compose` reads the same names from .env.)
+#   * register the Datenpflege MCP server ONCE in the chat, as a GLOBAL server
+#     (Settings -> MCP -> add for everyone):
+#       url http://crefo-dataops-mcp:9010/mcp   header Authorization: Bearer <MCP_TOKEN>
+#     exactly like the existing crmrev row. Chat AND agents then get the tools.
+#     WITHOUT THIS ROW THE DATENPFLEGE WRITE TOOLS ARE ABSENT -- they used to be
+#     patched into the agent image, and are now an ordinary MCP server.
+#
+# Creditreform customer + credit data is sensitive, so every service opts into
+# the encrypted-storage profile: on a box with encrypted storage the app waits
+# for the unlock; on a plain box it runs on the normal data dir.
+
+services:
+
+  # ---- public entry: path router (the ONE labelled service = the ONE route) --
+  crefo-chat:
+    # The one image a release does NOT pin: third-party, stateless, carries no
+    # Creditreform code, and `2-alpine` keeps collecting Caddy's patch releases
+    # between our releases. Everything of ours below is pinned.
+    image: caddy:2-alpine
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.app.name: "creditreform:agents"
+      indiebox.app.icon: "message-chatbot"
+      indiebox.app.http-port: "80"
+      # App version (read straight off this label by GET /v1/apps). This IS the
+      # release: it equals the git tag (v<version>) and the tag every image below
+      # is pinned to. Set by .github/workflows/release.yml -- do not edit by hand,
+      # or the box will report a version whose images it is not running.
+      indiebox.app.version: "1.1.5"
+      # Short catalog description (registry sync reads it off this label).
+      indiebox.app.description: "Creditreform chat, Insights dashboard and read-only revenue MCP as one app."
+      # ---- operator-set variables (indie-box "Required variables") -------------
+      # Declared so the dashboard prompts for these on install/update and lets the
+      # operator edit them later, instead of hand-editing the box's shared .env
+      # over SSH. Each <NAME> is the env var the services below interpolate
+      # (${<NAME>}); the value is stored once in the managed .env and resolves for
+      # every service.
+      #
+      # Required: encryption at rest for conversation titles + messages.
+      indiebox.app.var.CREFO_CHAT_ENCRYPTION_KEY.label: "Chat encryption key"
+      indiebox.app.var.CREFO_CHAT_ENCRYPTION_KEY.description: "64 hex chars encrypting conversation titles and messages at rest. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+      indiebox.app.var.CREFO_CHAT_ENCRYPTION_KEY.required: "true"
+      indiebox.app.var.CREFO_CHAT_ENCRYPTION_KEY.secret: "true"
+      # Required since the Datenpflege tools moved out of the agent image into
+      # the crefo-dataops-mcp sidecar: that sidecar exits without a token rather
+      # than answering every tool call with the same error. It was optional while
+      # the tools were patched in, so an existing box may not have it set yet.
+      indiebox.app.var.DATAOPS_TOKEN.label: "Datenpflege write token"
+      indiebox.app.var.DATAOPS_TOKEN.description: "Shared secret between the Datenpflege MCP sidecar and the Insights dashboard, which is the only writer of the customer DB. Generate any long random string; it never leaves the box."
+      indiebox.app.var.DATAOPS_TOKEN.required: "true"
+      indiebox.app.var.DATAOPS_TOKEN.secret: "true"
+      # Optional: bearer token guarding both MCP sidecars. Empty disables auth.
+      indiebox.app.var.MCP_TOKEN.label: "MCP token"
+      indiebox.app.var.MCP_TOKEN.description: "Bearer token required on every revenue-MCP and Datenpflege-MCP request. Leave empty to disable MCP authentication."
+      indiebox.app.var.MCP_TOKEN.required: "false"
+      indiebox.app.var.MCP_TOKEN.secret: "true"
+    configs:
+      - source: crefo-router-caddyfile
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- the chat: the published indie-chat image + config/ --------------------
+  crefo-chat-server:
+    image: ghcr.io/brainbot-com/crefo-chat:${CREFO_CHAT_TAG:-1.1.5}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      PORT: "3000"
+      PYTHON: /opt/venv/bin/python
+      # Chat state (indie.db) lives on the box data dir, not in the container.
+      INDIE_DATA_DIR: /data
+      # Encryption at rest for conversation titles + messages (64 hex chars):
+      #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      # Required -- `compose config` (and therefore the install) fails without it.
+      ENCRYPTION_KEY: ${CREFO_CHAT_ENCRYPTION_KEY:?set CREFO_CHAT_ENCRYPTION_KEY in the box .env}
+      # Coding agents [beta]: per-turn containers join `llm`, so they reach
+      # Ollama, this server and the sidecars by service name. They get NO
+      # dashboard source mount: the dashboard runs the code baked into
+      # `crefo-insights`, and changes to it go through this repo and a new
+      # image, not through a writable copy on the data dir.
+      AGENT_IMAGE: ghcr.io/brainbot-com/crefo-agent:${CREFO_AGENT_TAG:-1.1.5}
+      AGENT_NETWORK: llm
+      AGENT_CALLBACK_URL: http://crefo-chat-server:3000
+      AGENT_MEMORY: 1g
+      AGENT_CPUS: "1"
+      AGENT_MAX_CONCURRENT: "3"
+      # Appended to pi's system prompt. The default engine here is a LOCAL
+      # qwen3.6, which is the model family that drops or renames tool arguments
+      # on long calls: it will call crmrev_export_excel or crmrev_query with no
+      # arguments at all and then report that "parameters are silently
+      # discarded". The tools do take parameters -- query(sql),
+      # export_query_excel(sql, name), potential_model(top_n) -- so spell the
+      # contract out rather than let the model conclude they are unusable.
+      AGENT_GUIDANCE: >-
+        Beim Aufruf eines Tools IMMER alle noetigen Parameter mitgeben, mit den
+        exakten Namen aus dem Schema (nicht abkuerzen, nicht umbenennen, nicht
+        weglassen). Lange Werte wie SQL-Strings vollstaendig uebergeben.
+        Fuer freie Auswertungen gibt es crmrev_query(sql) und
+        crmrev_export_query_excel(sql, name); fuer Ranglisten
+        crmrev_potential_model(top_n, ...). Wenn ein Tool-Ergebnis nicht zu den
+        gesendeten Argumenten passt, den Aufruf einmal mit explizit gesetzten
+        Parametern wiederholen, bevor du sagst, etwas sei nicht moeglich.
+        Eine Excel-Datei kannst du ausserdem immer selbst erzeugen: Daten per
+        crmrev_query holen und mit python3/openpyxl in den Workspace schreiben.
+      # stdio MCP servers only; the HTTP ones (crmrev, dataops) are GLOBAL rows
+      # in the app DB so chat and agents share one list.
+      MCP_SERVERS: "[]"
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/crefo/chat:/data
+      # Agents launch per-turn "pi" containers on the host via this socket
+      # (fixed image, mem/cpu/pids caps, only the agent's own volume).
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - default
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- agent image, pulled onto the box as part of the app -------------------
+  # The per-turn agent containers are launched by the chat server over the
+  # Docker socket, so Compose never sees that image and would not pull it -- and
+  # the agent-engine gate hides the composer until `docker image inspect`
+  # succeeds. This one-shot service names the image so `docker compose up` pulls
+  # it, then exits; the image stays. No indiebox.app.* label (not a card), no
+  # data, no network.
+  crefo-agent-image:
+    image: ghcr.io/brainbot-com/crefo-agent:${CREFO_AGENT_TAG:-1.1.5}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: "no"
+    command: ["sh", "-c", "echo crefo-agent image present on the box"]
+
+  # ---- Insights dashboard (embedded at /insights) ----------------------------
+  crefo-insights:
+    image: ghcr.io/brainbot-com/crefo-insights:${CREFO_INSIGHTS_TAG:-1.1.5}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      # Sole writer of the customer DuckDB ("Festschreiben", ann_* Datenpflege,
+      # snapshots): pause during backups for a consistent DB file.
+      indiebox.pause-for-backup: "true"
+    environment:
+      PORT: "3060"
+      HOST: "0.0.0.0"
+      DB_PATH: /data/crefo-customers.duckdb
+      SNAP_PATH: /snap/festschreibungen.sqlite
+      URL_PREFIX: /insights
+      # "Im Chat-Agenten weiterarbeiten" link target. app.py defaults to the
+      # aibox1 LAN URL (http://10.1.9.7:3055), which is unreachable from a box:
+      # here the chat IS the gateway origin root, so link at the root.
+      CHAT_URL: /
+      # No source seeding and no hot reload: the dashboard runs the code baked
+      # into this image, so what is released is what runs. Upgrading the
+      # dashboard means a new image tag, nothing on the data dir.
+      # Datenpflege write API token (must match the sidecar's DATAOPS_TOKEN).
+      # Empty = API off, dashboard UI unaffected.
+      DATAOPS_TOKEN: ${DATAOPS_TOKEN:-}
+    volumes:
+      # READ-WRITE -- this service is the sole writer; the MCPs mount it :ro or
+      # do not touch the file at all.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/crefo/crefo-customers.duckdb:/data/crefo-customers.duckdb
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/crefo/snapshots:/snap
+    networks:
+      - default
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- read-only revenue MCP (chat tools + agents) ---------------------------
+  crefo-revenue-mcp:
+    image: ghcr.io/brainbot-com/crefo-revenue-mcp:${CREFO_REVENUE_MCP_TAG:-1.1.5}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "9000"
+      DB_PATH: /data/crefo-customers.duckdb
+      # Excel download links handed to the user in chat (export_excel,
+      # export_query_excel) are built from this. server.py defaults to the
+      # aibox1 LAN URL (http://10.1.9.7:3061); on a box the dashboard is
+      # path-routed under /insights on the SAME origin as the chat, so a
+      # root-relative prefix makes the links resolve for the browser that
+      # clicks them. NOT the internal http://crefo-insights:3060 -- that name
+      # resolves only inside the app network, never in the user's browser.
+      DASHBOARD_URL: /insights
+      MCP_TOKEN: ${MCP_TOKEN:-}
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/crefo/crefo-customers.duckdb:/data/crefo-customers.duckdb:ro
+    networks:
+      - default
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- Datenpflege MCP (the ann_* write tools) -------------------------------
+  # These tools used to be patched into the indie-chat AGENT image, which is why
+  # every upgrade meant re-cutting a patch. As a sidecar they are deployment
+  # code: the platform image stays stock and picks them up like any other MCP
+  # server. It holds NO database mount -- it calls the dashboard's guarded
+  # /api/datenpflege/* API, so the dashboard remains the only writer of the
+  # DuckDB file (snapshot before every change, serialized, logged).
+  crefo-dataops-mcp:
+    image: ghcr.io/brainbot-com/crefo-dataops-mcp:${CREFO_DATAOPS_MCP_TAG:-1.1.5}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "9010"
+      DATAOPS_URL: http://crefo-insights:3060
+      # Must match crefo-insights' DATAOPS_TOKEN. Unset = this sidecar exits at
+      # once rather than answering every tool call with the same error (the
+      # Datenpflege tools were inert without it before, too).
+      DATAOPS_TOKEN: ${DATAOPS_TOKEN:?set DATAOPS_TOKEN in the box .env, or remove the crefo-dataops-mcp service}
+      # Bearer token required on every MCP request, like crefo-revenue-mcp.
+      MCP_TOKEN: ${MCP_TOKEN:-}
+    networks:
+      - default
+      # `llm` so agent containers reach it under the same URL as the chat.
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+# Router config inline (an app install is a single Compose file -- no sidecar
+# file uploads -- so the Caddyfile ships as compose `configs.content`).
+configs:
+  crefo-router-caddyfile:
+    content: |
+      :80 {
+          # Dashboard under /insights: strip the prefix (handle_path); the
+          # dashboard's URL_PREFIX puts it back on outgoing URLs.
+          handle_path /insights/* {
+              reverse_proxy crefo-insights:3060 {
+                  flush_interval -1
+              }
+          }
+          redir /insights /insights/ permanent
+          # Everything else is the chat. flush_interval -1 keeps SSE token
+          # streaming unbuffered.
+          handle {
+              reverse_proxy crefo-chat-server:3000 {
+                  flush_interval -1
+              }
+          }
+      }
+
+networks:
+  default:
+  llm:
+    name: llm
