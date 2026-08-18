@@ -2,8 +2,7 @@
   "apps": [
     {
       "audience": [
-        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
-        "34f1fa330f8540b709876eee744485c820d53b331466f58e0fc9ec929624edfa"
+        "2fafe54c6f1fa347636fd2142015313bcf19facc77d1e72d591feedb5d09c234"
       ],
       "description": "Private chat and coding agents over the on-box models, the shared wiki and the Onyx knowledge index.",
       "icon": "robot",
@@ -85,7 +84,8 @@
     },
     {
       "audience": [
-        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
+        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
+        "34f1fa330f8540b709876eee744485c820d53b331466f58e0fc9ec929624edfa"
       ],
       "description": "Creditreform chat, Insights dashboard and read-only revenue MCP as one app.",
       "icon": "message-chatbot",
