@@ -163,6 +163,24 @@
           "version": "1.1.6"
         }
       ]
+    },
+    {
+      "audience": [
+        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
+      ],
+      "description": "Excel-Daten (Umsatz, CRM, Auskunft) in die Creditreform-DuckDB laden und exportieren.",
+      "icon": "database-import",
+      "id": "crefo-import",
+      "name": "creditreform:import",
+      "scope": "private",
+      "versions": [
+        {
+          "compose_path": "apps/crefo-import/0.1.0/compose.yml",
+          "compose_sha256": "d1f360f4904558cbcfef26ee015eaa17692371af5218341f54f28f9cece9264b",
+          "released_at": "2026-08-19T12:00:00Z",
+          "version": "0.1.0"
+        }
+      ]
     }
   ],
   "schema_version": 1
