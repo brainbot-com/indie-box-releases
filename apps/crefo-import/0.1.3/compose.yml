@@ -1,0 +1,99 @@
+# creditreform:import as an Indie Box app.
+#
+# Install/update via the box's app catalog (the registry entry lives in
+# brainbot-com/indie-box under registry/; the app id is `crefo-import`).
+# Uninstall: DELETE /api/docker-controller/v1/apps/crefo-import (keeps data).
+#
+# Pre-install requirement: the shared DuckDB must already exist at
+#   <SECURE_STORAGE_DIR|DATA_DIR>/crefo/crefo-customers.duckdb
+# (true on boxes running the crefo-chat app). Docker turns a per-file bind
+# mount of a missing path into an empty DIRECTORY, which breaks both this app
+# and crefo-chat's services mounting the same file.
+#
+# Shape of the app (see indie-box/docs/app-integration.md for the contract):
+#
+#   gateway ──> crefo-import (Caddy :80, the ONE labelled service)
+#                 ├─ /agent/{process,stats,admin/export} ──> crefo-import-agent:5300
+#                 └─ everything else ────────────────────── > crefo-import-web:5100
+#
+# - Exactly one service carries indiebox.app.* labels; the box renders the
+#   gateway route from them. The Caddy front exists because the app has two
+#   HTTP upstreams (static UI + API) but gets exactly one route.
+# - The Caddy path allowlist is deliberately exhaustive: the backend also
+#   serves POST /sql (unauthenticated read-write SQL), POST /ingest and
+#   POST /admin/wipe, which exist for the legacy aibox0 deployment and must
+#   NOT be reachable through the gateway. Extend @ui if the UI grows.
+# - No `ports:` (the gateway owns ingress), no `build:` (single-file upload;
+#   images come from ghcr), absolute bind mounts only.
+# - LLM/OpenWebUI wiring (llm network, OLLAMA_URL) is intentionally absent:
+#   this app is only the data import/export console.
+# - Every service opts into encrypted storage (profile + secure-gate) because
+#   the DuckDB lives under SECURE_STORAGE_DIR on boxes with it enabled;
+#   secure-gate is injected by the box, not defined here.
+# - crefo-insights (crefo-chat app) opens the same DuckDB file. Both sides
+#   retry on DuckDB's single-writer lock; long writes on one side can still
+#   surface as transient 5xx on the other.
+# - Version bump = run the Release workflow (.github/workflows/release.yml).
+#   It re-tags the images by digest, rewrites the two image tag defaults below
+#   and the indiebox.app.version label together (indiebox/pin-images.sh), tags
+#   v<version> and opens the registry PR on indie-box. Do not hand-edit those
+#   three lines: that is how the label and the images it claims to ship come
+#   apart, which is why pin-images.sh --check runs on every PR.
+
+services:
+  crefo-import: # the labelled UI service; name == app id
+    image: caddy:2-alpine
+    profiles: ["${SECURE_STORAGE_PROFILE:-stable}"]
+    restart: always
+    labels:
+      indiebox.app.name: "creditreform:import"
+      indiebox.app.icon: "database-import"
+      indiebox.app.http-port: "80"
+      indiebox.app.version: "0.1.3"
+      indiebox.app.description: "Excel-Daten (Umsatz, CRM, Auskunft) in die Creditreform-DuckDB laden und exportieren."
+    configs:
+      - source: crefo-import-caddyfile
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  crefo-import-web:
+    image: ghcr.io/brainbot-com/crefo-import-web:${CREFO_IMPORT_WEB_TAG:-0.1.3}
+    profiles: ["${SECURE_STORAGE_PROFILE:-stable}"]
+    restart: always
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  crefo-import-agent:
+    image: ghcr.io/brainbot-com/crefo-import-agent:${CREFO_IMPORT_AGENT_TAG:-0.1.3}
+    profiles: ["${SECURE_STORAGE_PROFILE:-stable}"]
+    restart: always
+    labels:
+      # Holds the shared DuckDB open; backups pause it for a consistent file
+      # (same label as crefo-insights, which also writes this DB).
+      indiebox.pause-for-backup: "true"
+    environment:
+      DB_PATH: /data/crefo-customers.duckdb
+    volumes:
+      # The same file the crefo-chat app's services mount. READ-WRITE: this
+      # app is the loader that fills the tables the crefo stack reads.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/crefo/crefo-customers.duckdb:/data/crefo-customers.duckdb
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+configs:
+  crefo-import-caddyfile:
+    content: |
+      :80 {
+          handle_path /agent/* {
+              @ui path /process /stats /admin/export
+              reverse_proxy @ui crefo-import-agent:5300
+              respond 403
+          }
+          handle {
+              reverse_proxy crefo-import-web:5100
+          }
+      }

@@ -191,6 +191,12 @@
           "compose_sha256": "d1f360f4904558cbcfef26ee015eaa17692371af5218341f54f28f9cece9264b",
           "released_at": "2026-08-19T12:00:00Z",
           "version": "0.1.0"
+        },
+        {
+          "compose_path": "apps/crefo-import/0.1.3/compose.yml",
+          "compose_sha256": "905af0a6c90d054a8ff75c54830b37287ed6f599fa239679230c9312b957d517",
+          "released_at": "2026-08-20T18:00:49Z",
+          "version": "0.1.3"
         }
       ]
     }
