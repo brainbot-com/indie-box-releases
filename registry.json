@@ -87,10 +87,10 @@
         "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
         "34f1fa330f8540b709876eee744485c820d53b331466f58e0fc9ec929624edfa"
       ],
-      "description": "Creditreform chat, Insights dashboard and read-only revenue MCP as one app.",
+      "description": "Crefo chat, Insights dashboard and read-only revenue MCP as one app.",
       "icon": "message-chatbot",
       "id": "crefo-chat",
-      "name": "creditreform:agents",
+      "name": "crefo:agents",
       "scope": "private",
       "variables": [
         {
@@ -173,6 +173,12 @@
           "compose_sha256": "ef8542b299050a826d7ca924338ec2ae09f4f388e571376b2d304a8431dd10a7",
           "released_at": "2026-08-20T17:38:55Z",
           "version": "1.1.8"
+        },
+        {
+          "compose_path": "apps/crefo-chat/1.2.0/compose.yml",
+          "compose_sha256": "9b76530e930c5a7ece83ef194ec2b18a99dac33a51f75d490e30e5c070e54728",
+          "released_at": "2026-08-21T12:28:00Z",
+          "version": "1.2.0"
         }
       ]
     },
@@ -180,10 +186,10 @@
       "audience": [
         "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
       ],
-      "description": "Excel-Daten (Umsatz, CRM, Auskunft) in die Creditreform-DuckDB laden und exportieren.",
+      "description": "Excel-Daten (Umsatz, CRM, Auskunft) in die Crefo-DuckDB laden und exportieren.",
       "icon": "database-import",
       "id": "crefo-import",
-      "name": "creditreform:import",
+      "name": "crefo:import",
       "scope": "private",
       "versions": [
         {
@@ -197,6 +203,12 @@
           "compose_sha256": "905af0a6c90d054a8ff75c54830b37287ed6f599fa239679230c9312b957d517",
           "released_at": "2026-08-20T18:00:49Z",
           "version": "0.1.3"
+        },
+        {
+          "compose_path": "apps/crefo-import/1.0.0/compose.yml",
+          "compose_sha256": "9bfe1a53846e68d8ca083d6dddee0be0a3ba0ea0e51ac728fbff1d633ba8d72c",
+          "released_at": "2026-08-21T12:27:45Z",
+          "version": "1.0.0"
         }
       ]
     }
