@@ -215,6 +215,12 @@
           "compose_sha256": "880f0068ce3939c190f3b85206fd7445e46911b746cb65de843015c250e538b2",
           "released_at": "2026-08-21T17:32:24Z",
           "version": "1.2.7"
+        },
+        {
+          "compose_path": "apps/crefo-chat/1.2.8/compose.yml",
+          "compose_sha256": "520d1d76f1f2e54ff1d8c0cb565fbe2a7648161e6b37acf245aeba63fbee39d7",
+          "released_at": "2026-08-21T17:53:29Z",
+          "version": "1.2.8"
         }
       ]
     },
