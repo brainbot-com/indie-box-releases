@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "tag": "qwen3.5:122b",
+      "name": "Qwen 3.5 122B",
+      "description": "The largest model in the catalog. Strong answers, and the highest GPU memory requirement. (Caveat: a somewhat older model)"
+    },
+    {
+      "tag": "qwen3.6:35b",
+      "name": "Qwen 3.6 35B",
+      "description": "A well-rounded general-purpose model, and the previous default choice for most boxes."
+    },
+    {
+      "tag": "qwen3.6:27b",
+      "name": "Qwen 3.6 27B",
+      "description": "The smaller sibling of Qwen 3.6 35B: quicker to answer and lighter on GPU memory."
+    },
+    {
+      "tag": "qwen3.8:27b",
+      "name": "Qwen 3.8 27B",
+      "description": "The newest member of the Qwen series and the new default: Surpasses the previous versions in many tasks while staying light and fast.",
+      "min_platform_version": "0.6.0"
+    },
+    {
+      "tag": "gemma4:e4b",
+      "name": "Gemma 4 E4B",
+      "description": "A compact model that answers fast and fits alongside other workloads."
+    },
+    {
+      "tag": "nemotron3:33b",
+      "name": "Nemotron 3 33B",
+      "description": "A mid-sized general-purpose model for reasoning-heavy chats."
+    },
+    {
+      "tag": "gpt-oss:120b",
+      "name": "GPT-OSS 120B",
+      "description": "A large open-weight model for demanding tasks; plan for a long download."
+    }
+  ]
+}
