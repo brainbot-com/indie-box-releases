@@ -36,6 +36,11 @@
       "tag": "gpt-oss:120b",
       "name": "GPT-OSS 120B",
       "description": "A large open-weight model for demanding tasks; plan for a long download."
+    },
+    {
+      "tag": "qwen2.5:14b-instruct",
+      "name": "Qwen 2.5 14b-instruct",
+      "description": "Ein leichtgewichtiges und schnelles model für einfachere Aufgaben."
     }
   ]
 }
