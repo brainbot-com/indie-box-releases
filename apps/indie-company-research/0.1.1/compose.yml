@@ -1,0 +1,135 @@
+# Company Research & Enrichment Engine als Indie-Box-App.
+#
+# Was die App ist: ein Container, der zu einem Unternehmen und einem
+# Recherche-Auftrag im Web nachschlägt und ein JSON-Ergebnis mit Belegen
+# zurückgibt. Drei Oberflächen auf demselben Port 5400 — /admin (Verwaltung),
+# /v1/* (REST mit Client-Key) und /mcp (MCP Streamable HTTP mit Client-Key).
+# Die Provider (Sprachmodell, Suche, Seitenabruf) werden nicht hier
+# konfiguriert, sondern in der Verwaltungsoberfläche der App. Beim allerersten
+# Start richtet die Engine sich selbst ein: ein Provider gegen das Ollama der
+# Box und ein Client-Key (siehe die BOOTSTRAP_*-Zeilen unter environment).
+#
+# Installieren/aktualisieren: über den App-Katalog der Box (Apps-Seite im
+# Dashboard). Deinstallieren: ebenfalls dort, oder
+# DELETE /api/docker-controller/v1/apps/company-research — die Daten unter
+# <SECURE_STORAGE_DIR|DATA_DIR>/company-research bleiben in beiden Fällen
+# liegen, inklusive der verschlüsselten Provider-Zugänge.
+#
+# Welche Regeln des Label-Vertrags hier greifen
+# (indie-box/docs/app-integration.md) und warum:
+#
+# - GENAU EIN Service trägt indiebox.app.* — der Service heißt wie die App-ID
+#   (`company-research`). Die Box liest Kachel, Version und Gateway-Route aus
+#   diesen Labels; mehr oder weniger als ein gelabelter Service lässt den
+#   Install scheitern. Diese App hat nur einen Prozess, also braucht sie auch
+#   keinen Caddy-Router davor wie die crefo-import-App.
+# - KEIN `ports:`. Das Gateway besitzt die externen Ports und leitet einen Port
+#   aus 9200-9249 auf indiebox.app.http-port (hier 5400) weiter.
+# - KEIN `build:`. Auf die Box wird nur diese eine Datei hochgeladen; das Image
+#   kommt aus der Registry und ist auf eine Version gepinnt, nie auf `latest`.
+#   Wer die Version anhebt, ändert Image-Default UND indiebox.app.version
+#   gemeinsam — dafür ist indiebox/pin-images.sh da, und `--check` bewacht das
+#   in CI.
+# - Bind-Mounts nur absolut. Ein relativer Pfad würde auf der Box ins Leere
+#   zeigen und von Docker als leeres Verzeichnis angelegt.
+# - Zwei Netze: `default` (das Gateway erreicht die App) und `llm` (die App
+#   erreicht Ollama unter http://ollama:11434). Die lange Begründung steht
+#   unten beim `networks:`-Block des Service — beides wegzulassen wäre
+#   folgenlos, nur eines von beiden ist ein stiller Ausfall.
+# - Verschlüsselter Speicher: profiles + depends_on: secure-gate. Hier liegen
+#   Provider-Credentials (verschlüsselt mit einem Schlüssel, der im selben
+#   Verzeichnis liegt) und Client-Key-Hashes. Auf einer Box mit
+#   Festplattenverschlüsselung startet die App deshalb erst, wenn das Volume
+#   entsperrt ist; ohne Verschlüsselung greift das Profil `stable` und die
+#   Zeilen sind wirkungslos. `secure-gate` wird von der Box beigesteuert, nicht
+#   hier definiert — es ist der einzige Plattform-Service, von dem eine App
+#   abhängen darf.
+#
+# Das Volume ist ein VERZEICHNIS, kein Datei-Bind-Mount. Die Referenz-App
+# mountet eine einzelne DuckDB-Datei, weil sie sich diese Datei mit einer
+# anderen App teilt. Hier wäre das falsch: die Engine legt zur Laufzeit mehrere
+# Dateien selbst an (engine.db, dazu WAL und SHM von SQLite, secret.key mit
+# 0600), und ein Datei-Mount auf einen nicht existierenden Pfad wird von Docker
+# zu einem leeren VERZEICHNIS — das ist genau die Falle, die in der
+# Referenz-App als Vorbedingung dokumentiert ist. Ein Verzeichnis-Mount hat
+# diese Vorbedingung nicht: er funktioniert auch beim allerersten Start.
+#
+# `user:` wird hier absichtlich NICHT gesetzt. Der Container läuft als root und
+# muss das auch, weil Docker das Host-Verzeichnis beim ersten Start als
+# root:root anlegt (Begründung im Kopf von engine/Dockerfile).
+
+services:
+  company-research: # der gelabelte Service; Name == App-ID
+    image: ghcr.io/brainbot-com/company-research:${COMPANY_RESEARCH_TAG:-0.1.1}
+    # "stable" im Normalfall, "encrypted" auf Boxen mit verschlüsseltem
+    # Speicher — dort wartet die App dann auf das Entsperren.
+    profiles: ["${SECURE_STORAGE_PROFILE:-stable}"]
+    restart: always
+    labels:
+      indiebox.app.name: "Web Datenanreicherung"
+      indiebox.app.icon: "search"
+      indiebox.app.http-port: "5400"
+      indiebox.app.version: "0.1.1"
+      indiebox.app.description: "Recherchiert zu Unternehmen im Web und liefert belegte Antworten als JSON — über Oberfläche, REST oder MCP."
+      # Absichtlich KEINE Variable für einen API-Key: die Engine richtet sich
+      # beim ersten Start selbst ein (siehe environment unten), und jeder
+      # Cloud-Zugang wird nachträglich in der Verwaltungsoberfläche angelegt.
+      # Ein Installationsformular, das nach einem Schlüssel fragt, den man
+      # später genauso gut in der App eintragen kann, ist nur eine Hürde.
+      indiebox.app.var.COMPANY_RESEARCH_LOG_LEVEL.label: "Log-Level"
+      indiebox.app.var.COMPANY_RESEARCH_LOG_LEVEL.description: "Wie ausführlich die App in das Container-Log schreibt: DEBUG, INFO, WARNING oder ERROR. Credentials und Antworten stehen in keinem Fall im Log."
+      indiebox.app.var.COMPANY_RESEARCH_LOG_LEVEL.required: "false"
+      indiebox.app.var.COMPANY_RESEARCH_LOG_LEVEL.default: "INFO"
+      # Die SQLite-Datenbank soll für ein Backup in Ruhe gelassen werden.
+      indiebox.pause-for-backup: "true"
+    environment:
+      LOG_LEVEL: ${COMPANY_RESEARCH_LOG_LEVEL:-INFO}
+      # Erste Schritte, automatisiert: beim ALLERERSTEN Start (leere Datenbank)
+      # legt die Engine daraus einen Provider „Ollama“ (Rolle llm, gegen das
+      # Ollama der Box im Netz `llm`) und einen Client-Key „Indie Box“ an.
+      # Danach werden die Werte nie wieder gelesen: was der Operator in der
+      # Oberfläche ändert, bleibt die Wahrheit — auch über Updates hinweg.
+      # Der Klartext des Client-Keys liegt einmalig unter
+      # <Volume>/client-api-key.txt (0600); neue Keys erzeugt die Oberfläche.
+      BOOTSTRAP_OLLAMA_BASE_URL: http://ollama:11434
+      # Das Modell muss auf der Box gepullt sein (ollama pull …) — ob es da
+      # ist, sagt „Verbindung testen“ im Provider-Tab. Eine Box mit anderem
+      # Modell setzt COMPANY_RESEARCH_OLLAMA_MODEL in ihrer gemeinsamen .env
+      # (wirkt nur auf den allerersten Start; später zählt die Oberfläche).
+      BOOTSTRAP_OLLAMA_MODEL: ${COMPANY_RESEARCH_OLLAMA_MODEL:-qwen2.5:14b-instruct}
+      BOOTSTRAP_CLIENT_KEY: "Indie Box"
+    volumes:
+      # engine.db (SQLite) und secret.key. Folgt dem Speichermodus der Box:
+      # normales Datenverzeichnis oder verschlüsseltes Volume.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/company-research:/data
+    depends_on:
+      # Startet nicht, solange das verschlüsselte Volume nicht eingebunden ist.
+      secure-gate:
+        condition: service_completed_successfully
+    networks:
+      # BEIDE Netze sind nötig, und das ist kein Versehen:
+      #
+      #   default  das App-Netz, das Compose für dieses Projekt anlegt. Darin
+      #            findet das Gateway den Container. Wer diese Zeile weglässt
+      #            und nur `llm` stehen lässt, nimmt dem Service das
+      #            Default-Netz (so ist `networks:` in Compose definiert: die
+      #            Liste ersetzt, sie ergänzt nicht) — die App läuft dann, ist
+      #            aber über die Box-Kachel nicht mehr erreichbar. Genau die
+      #            Art Fehler, die man Monate später teuer sucht.
+      #   llm      das gemeinsame Netz des LLM-Dienstes der Box
+      #            (services/llm/compose.yml, Teil des Plattform-Contracts in
+      #            indie-box/docs/app-integration.md). Erst dadurch ist Ollama
+      #            aus diesem Container unter http://ollama:11434 erreichbar —
+      #            der Wert, den man im Provider „Lokales Modell“ als Basis-URL
+      #            einträgt. Ollama selbst wird hier NICHT definiert; es läuft
+      #            als eigener Dienst der Box.
+      - default
+      - llm
+
+# Das `llm`-Netz trägt einen festen Namen, weil es projektübergreifend ist: ohne
+# `name:` würde Compose es zu `<projekt>_llm` machen und ein zweites, leeres Netz
+# anlegen, in dem kein Ollama steht.
+networks:
+  default:
+  llm:
+    name: llm

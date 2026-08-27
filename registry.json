@@ -268,7 +268,8 @@
     },
     {
       "audience": [
-        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
+        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
+        "34f1fa330f8540b709876eee744485c820d53b331466f58e0fc9ec929624edfa"
       ],
       "description": "Excel-Daten (Umsatz, CRM, Auskunft) in die Crefo-DuckDB laden und exportieren.",
       "icon": "database-import",
@@ -299,6 +300,33 @@
           "compose_sha256": "6056c081e1694a322bfc6dc8920162ddca103f792bc9e07e757a27bed2311202",
           "released_at": "2026-08-21T15:24:15Z",
           "version": "1.0.1"
+        }
+      ]
+    },
+    {
+      "audience": [
+        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
+      ],
+      "description": "Recherchiert zu Unternehmen im Web und liefert belegte Antworten als JSON \u2014 \u00fcber Oberfl\u00e4che, REST oder MCP.",
+      "icon": "search",
+      "id": "indie-company-research",
+      "name": "Web Datenanreicherung",
+      "scope": "private",
+      "variables": [
+        {
+          "default": "INFO",
+          "description": "Wie ausf\u00fchrlich die App in das Container-Log schreibt: DEBUG, INFO, WARNING oder ERROR. Credentials und Antworten stehen in keinem Fall im Log.",
+          "label": "Log-Level",
+          "name": "COMPANY_RESEARCH_LOG_LEVEL",
+          "required": false
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/indie-company-research/0.1.1/compose.yml",
+          "compose_sha256": "d3c6102a2b3365a0baeb2677eedc4f68d3f1ed73a35e1604aaf4a271b8861560",
+          "released_at": "2026-08-27T13:20:00Z",
+          "version": "0.1.1"
         }
       ]
     }
