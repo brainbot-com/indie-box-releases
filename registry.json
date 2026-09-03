@@ -63,6 +63,12 @@
           "version": "1.11.0"
         },
         {
+          "compose_path": "apps/agent-command/1.12.0/compose.yml",
+          "compose_sha256": "f07034461d42ab0a3af143bfc297ee95a8388f458c56a00a9c4657bdc9113e54",
+          "released_at": "2026-09-03T14:30:00Z",
+          "version": "1.12.0"
+        },
+        {
           "compose_path": "apps/agent-command/1.2.0/compose.yml",
           "compose_sha256": "75cb28a10c2c04050ea75a1185aec26fa39bc8e1fa871df0f35b7107d59dc459",
           "released_at": "2026-08-14T09:20:00Z",
