@@ -1,0 +1,216 @@
+# Indie Box app: "lightforce agent command" -- indie.chat, the agent command centre.
+#
+# Catalog id `agent-command`. This REPLACES the hand-uploaded
+# lightforce-agent-command.yml, and with it the whole build-on-the-box routine:
+#
+#   before   cd ~/indie-chat && python3 apply-customizations.py \
+#              && docker build -t indie-chat:latest . && re-PUT this file
+#   now      pick a version in the dashboard
+#
+# The image is the published indie.chat plus this repo's config/ (see
+# chat-image/Dockerfile and config/README.md). Nothing is patched, so a new
+# upstream release is a tag rather than a re-cut patch.
+#
+# Contract notes that still apply (from docs/app-integration.md in
+# brainbot-com/indie-box):
+#   - No `ports`: the public port is pinned by indiebox.app.port.
+#   - No `build:`. An install uploads one Compose file, so images come from a
+#     registry. indie-chat / indie-agent are public; nothing here needs auth.
+#   - Image defaults are IMMUTABLE sha tags, not `latest`. An app version has to
+#     mean one exact build: with `latest`, rebuilding silently changes what
+#     "1.0.1" contains, and an update can also be a no-op because the tag is
+#     already on the box, so nothing is pulled. Bump these with the version.
+#   - Secrets are declared as indiebox.app.var.* and prompted for by the
+#     dashboard, then stored in the box's managed .env. That replaces the old
+#     `${VAR:-}` workaround, which existed only because a strict `${VAR:?}`
+#     failed install validation before required-variables existed.
+#   - AGENT_CALLBACK_URL must be a HOST address: on the restricted egress tiers
+#     the turn container runs on indie-agent-net, where container names do not
+#     resolve, and those tiers broker the model through this URL.
+#
+# `container_name` stays pinned so the MCP registration and the agent callback
+# keep referring to a stable name.
+
+services:
+  # The catalog requires the app id to equal the labeled UI service's name, so
+  # this service is `agent-command`. container_name stays pinned to
+  # indiechat-app-1, so the MCP registration and the agent callback keep
+  # referring to the same container as before the rename.
+  agent-command:
+    image: ghcr.io/brainbot-com/lightforce-chat:${AGENT_COMMAND_TAG:-sha-a232935}
+    container_name: indiechat-app-1
+    profiles:
+      - stable
+    restart: always
+    command: npm start
+    labels:
+      indiebox.app.name: "lightforce agent command"
+      indiebox.app.icon: "robot"
+      indiebox.app.http-port: "3000"
+      indiebox.app.port: "9202"
+      indiebox.app.version: "1.14.0"
+      indiebox.app.description: "Private chat and coding agents over the on-box models, the shared wiki and the Onyx knowledge index."
+
+      # Prompted for at install/update and stored in the box's managed .env.
+      indiebox.app.var.INDIECHAT_ENCRYPTION_KEY.label: "Chat encryption key"
+      indiebox.app.var.INDIECHAT_ENCRYPTION_KEY.description: "64 hex chars encrypting conversation titles, messages and agent transcripts at rest. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\". Keep it: changing it makes existing conversations unreadable."
+      indiebox.app.var.INDIECHAT_ENCRYPTION_KEY.required: "true"
+      indiebox.app.var.INDIECHAT_ENCRYPTION_KEY.secret: "true"
+
+      indiebox.app.var.SERPER_KEY.label: "Web search key (Serper)"
+      indiebox.app.var.SERPER_KEY.description: "Enables web search for chat, agents and routines. Set here rather than in the app's own settings: a key entered there lives in one browser and never reaches agent turns. Leave empty to disable web search."
+      indiebox.app.var.SERPER_KEY.required: "false"
+      indiebox.app.var.SERPER_KEY.secret: "true"
+
+      indiebox.app.var.ONYX_SEARCH_TOKEN.label: "Onyx search token"
+      indiebox.app.var.ONYX_SEARCH_TOKEN.description: "Read token for the search app's /api/sources, used only to show which connectors feed the index on the Brain page. Leave empty to hide those figures."
+      indiebox.app.var.ONYX_SEARCH_TOKEN.required: "false"
+      indiebox.app.var.ONYX_SEARCH_TOKEN.secret: "true"
+    environment:
+      PORT: "3000"
+      PYTHON: /opt/venv/bin/python
+      # Chat state (indie.db) on the box data dir, not in the container.
+      INDIE_DATA_DIR: /data
+      ENCRYPTION_KEY: ${INDIECHAT_ENCRYPTION_KEY:-}
+      # The router's master key, read from the mounted file below rather than
+      # from a variable: one entry both allowlists the host AND supplies the
+      # credential to the chat proxy, the agent broker and open-tier turns.
+      EXTRA_HOST_KEYS: '{"llm-router":{"authorizationFile":"/run/lf/router.key"}}'
+      # The on-box ollama, reachable directly as a fallback provider.
+      EXTRA_ALLOWED_HOSTS: indiebox-ollama-1
+      SERPER_KEY: ${SERPER_KEY:-}
+      # PII privacy filter. redaction.js talks ONLY to this service and has no
+      # regex fallback, so without it a turn with the filter on is blocked
+      # (fail safe) rather than sent unredacted.
+      OPF_SERVICE_URL: http://privacy-filter:8765
+      # Coding agents: per-turn containers join `llm`, so they reach ollama, the
+      # router, onyx-mcp and this server by name. Restricted egress tiers move
+      # them to indie-agent-net instead and broker everything through the app.
+      AGENT_IMAGE: ghcr.io/brainbot-com/indie-agent:${INDIE_AGENT_TAG:-sha-bcf92b3}
+      AGENT_NETWORK: llm
+      AGENT_MAX_CONCURRENT: "3"
+      AGENT_CALLBACK_URL: http://172.17.0.1:9202
+      # Model-family workaround: some local models invent short tool-argument
+      # names on long strings, and some omit a large argument altogether.
+      # Upstream appends this to pi's system prompt.
+      #
+      # The last line used to say "re-issue the SAME call". That was written for
+      # a model that RENAMED `content` to `html`, where repeating the call with the
+      # right name IS the fix. Against the failure seen on 2026-08-20 it was the
+      # worst possible advice: the model emitted `write` with `path` and no
+      # `content` at all, stopReason `stop`, about 1% of attempts succeeding, and
+      # "retry verbatim" turned that into 614 identical rejected calls in a single
+      # turn. An identical retry of a rejected call cannot succeed, so the guidance
+      # now bounds the retry and names a smaller-payload way out.
+      AGENT_GUIDANCE: |-
+        Tool calls: use each tool's parameter names EXACTLY as declared. The bash tool takes `command`; the write tool takes `path` and `content`. Never abbreviate or rename them (not `cmd`, not `html`).
+        A write call must carry `content` in the SAME call as `path`. There is no way to send the body afterwards, and a call with only `path` is rejected.
+        For any file longer than a few lines, use the write tool and then run it with bash, rather than piping a long heredoc through bash. Your output is not being truncated, so do not shorten or rewrite the content merely because a call was rejected.
+        If a write is rejected for a missing property, re-issue it ONCE with every required property present. If the SECOND attempt is rejected the same way, stop repeating it: an identical call earns an identical rejection and will burn the whole turn. Build the file in pieces instead, several smaller writes to part files plus one bash command to concatenate them, then delete the parts.
+        Large files are where this fails, so prefer a few writes of a few hundred lines over one write of several thousand.
+      # stdio MCP servers only; onyx-mcp is registered as a GLOBAL row in the
+      # app database so chat and agents share one list.
+      MCP_SERVERS: "[]"
+    volumes:
+      - /home/indiebox/indiechat-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/indiebox/llm-router/master.key:/run/lf/router.key:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - onyx_default
+      - llm
+      - opf
+
+  # ---- agent image, pulled onto the box as part of the app -------------------
+  # Per-turn agent containers are launched by the chat server over the Docker
+  # socket, so Compose never sees that image and would not pull it -- and the
+  # agent-engine gate hides the composer until `docker image inspect` succeeds.
+  # This one-shot service names the image so `docker compose up` pulls it, then
+  # exits. No indiebox.app.* label (not a card of its own), no data, no network.
+  #
+  # It must be the SAME release as the chat image: the pi extension is baked
+  # into it, so a stale agent silently runs last release's tools. The app warns
+  # at boot when the two versions differ.
+  agent-command-agent-image:
+    image: ghcr.io/brainbot-com/indie-agent:${INDIE_AGENT_TAG:-sha-bcf92b3}
+    profiles:
+      - stable
+    restart: "no"
+    command: ["sh", "-c", "echo agent image present on the box"]
+
+  # ---- live figures for the Brain app ---------------------------------------
+  # These used to be a connector patched into indie.chat's source, which is the
+  # single reason this deployment was pinned to one upstream commit. As a
+  # sidecar it is deployment code: the platform image stays stock and reaches it
+  # through config/connectors.json like any other declared connector.
+  #
+  # It holds no database and no model access -- it reads counts and names from
+  # the search app, ollama and the MCP server, and each probe settles on its own
+  # so one component being down degrades its own card.
+  lf-stats:
+    image: ghcr.io/brainbot-com/lf-stats:${LF_STATS_TAG:-latest}
+    container_name: lf-stats
+    profiles:
+      - stable
+    restart: always
+    environment:
+      PORT: "9020"
+      LF_SEARCH_URL: http://onyx-search-ui:8500
+      LF_OLLAMA_URL: http://indiebox-ollama-1:11434
+      LF_MCP_URL: http://onyx-mcp:9000/mcp
+      ONYX_SEARCH_TOKEN: ${ONYX_SEARCH_TOKEN:-}
+    networks:
+      - default
+      - onyx_default
+      - llm
+
+  # ---- the openai/privacy-filter model, as a private sidecar ----------------
+  # Redaction happens in the APP process, not in the turn container, so only the
+  # chat needs to reach this -- which keeps it off every other network and out
+  # of reach of agent turns entirely.
+  #
+  # CPU by design: it does OPF(device="cpu") and installs from the CPU-only
+  # torch wheels, so it never competes for VRAM with the models the router
+  # serves.
+  privacy-filter:
+    image: ghcr.io/brainbot-com/indie-chat-opf:${OPF_TAG:-latest}
+    container_name: privacy-filter
+    profiles:
+      - stable
+    restart: always
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8765"
+      HF_HOME: /root/.cache/huggingface
+      # tiktoken fetches its BPE encoding on FIRST USE, not at import, and this
+      # container has no egress. Point the cache inside the persisted volume so
+      # it survives a restart. Without this, /redact returns 500 with a DNS
+      # error while /health still reports model_loaded: true.
+      TIKTOKEN_CACHE_DIR: /root/.cache/tiktoken
+    volumes:
+      - opf-cache:/root/.cache
+      - opf-model:/root/.opf
+    networks:
+      - opf
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,json,sys; d=json.load(urllib.request.urlopen('http://localhost:8765/health',timeout=5)); sys.exit(0 if d.get('model_loaded') else 1)\""]
+      interval: 15s
+      timeout: 10s
+      # First start downloads ~600 MB of weights.
+      start_period: 900s
+      retries: 5
+
+networks:
+  onyx_default:
+    external: true
+  llm:
+    external: true
+  # internal: the filter sees the app and nothing else.
+  opf:
+    internal: true
+
+volumes:
+  opf-cache:
+  opf-model:
