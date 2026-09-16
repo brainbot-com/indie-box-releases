@@ -407,6 +407,63 @@
           "version": "0.1.1"
         }
       ]
+    },
+    {
+      "audience": [
+        "2067da30e99812424dbf7ed89e018446867ae208fed083508e0d0f5dde77cbc7"
+      ],
+      "description": "Privater KI-Chat f\u00fcr Kreysch: Unterhaltungen, Coding-Agenten und der Fachdaten-MCP als eine App.",
+      "icon": "message",
+      "id": "kreysch-chat",
+      "name": "kreysch:chat",
+      "scope": "private",
+      "variables": [
+        {
+          "description": "64 Hex-Zeichen, verschl\u00fcsseln Titel und Nachrichten im Ruhezustand. Erzeugen mit: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+          "label": "Verschl\u00fcsselungsschl\u00fcssel",
+          "name": "KREYSCH_CHAT_ENCRYPTION_KEY",
+          "secret": true
+        },
+        {
+          "description": "Das erste Eigent\u00fcmer-Konto. Ohne diesen Wert legt das Image seine Entwicklungskonten mit ver\u00f6ffentlichten Passw\u00f6rtern an.",
+          "label": "E-Mail des ersten Kontos",
+          "name": "KREYSCH_CHAT_ADMIN_EMAIL"
+        },
+        {
+          "description": "Passwort f\u00fcr das erste Eigent\u00fcmer-Konto. Nach der ersten Anmeldung in der App \u00e4nderbar.",
+          "label": "Passwort des ersten Kontos",
+          "name": "KREYSCH_CHAT_ADMIN_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Zugang zum StudioLLM-Gateway (Qwen 3.6 35B auf der RTX 5090). Ohne ihn antwortet kein Modell. Die Box braucht daf\u00fcr ausgehenden Zugang zu studiollm.brainbot.com.",
+          "label": "StudioLLM-Schl\u00fcssel",
+          "name": "KREYSCH_STUDIOLLM_KEY",
+          "secret": true
+        },
+        {
+          "description": "Bearer-Token, das der Fachdaten-MCP auf jeder Anfrage verlangt. Leer lassen schaltet die Pr\u00fcfung ab; auf einer Box mit mehreren Nutzern setzen.",
+          "label": "MCP-Token",
+          "name": "KREYSCH_MCP_TOKEN",
+          "required": false,
+          "secret": true
+        },
+        {
+          "description": "Schl\u00fcssel f\u00fcr serper.dev. Leer lassen, wenn die Websuche im Chat aus bleiben soll.",
+          "label": "Serper-Schl\u00fcssel (Websuche)",
+          "name": "KREYSCH_SERPER_KEY",
+          "required": false,
+          "secret": true
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/kreysch-chat/0.1.0/compose.yml",
+          "compose_sha256": "746441e0edcb2e3f4f9dd58a34181ef9f976617ea13f7b5abede56ca0dcdf8f1",
+          "released_at": "2026-09-11T00:00:00Z",
+          "version": "0.1.0"
+        }
+      ]
     }
   ],
   "schema_version": 1
