@@ -479,6 +479,12 @@
           "compose_sha256": "746441e0edcb2e3f4f9dd58a34181ef9f976617ea13f7b5abede56ca0dcdf8f1",
           "released_at": "2026-09-11T00:00:00Z",
           "version": "0.1.0"
+        },
+        {
+          "compose_path": "apps/kreysch-chat/0.1.1/compose.yml",
+          "compose_sha256": "988c5e37773e39048cb734b80296f3aa84f746851628087c35c5825a706482e9",
+          "released_at": "2026-09-16T18:55:30Z",
+          "version": "0.1.1"
         }
       ]
     }
