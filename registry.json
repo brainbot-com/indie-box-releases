@@ -410,7 +410,8 @@
     },
     {
       "audience": [
-        "2067da30e99812424dbf7ed89e018446867ae208fed083508e0d0f5dde77cbc7"
+        "2067da30e99812424dbf7ed89e018446867ae208fed083508e0d0f5dde77cbc7",
+        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
       ],
       "description": "Privater KI-Chat f\u00fcr Kreysch: Unterhaltungen, Coding-Agenten und der Fachdaten-MCP als eine App.",
       "icon": "message",
