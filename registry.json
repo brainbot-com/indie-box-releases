@@ -382,6 +382,22 @@
       ]
     },
     {
+      "audience": [],
+      "description": "Private chat, coding agents and a shared wiki over the box's own models.",
+      "icon": "message-chatbot",
+      "id": "indie-chat",
+      "name": "indie.chat",
+      "scope": "public",
+      "versions": [
+        {
+          "compose_path": "apps/indie-chat/0.1.0/compose.yml",
+          "compose_sha256": "d9bc7c0060f370a2792ebd53093716f5e7281f937d3c5a2e04ccfeeca6060e80",
+          "released_at": "2026-09-16T18:54:31Z",
+          "version": "0.1.0"
+        }
+      ]
+    },
+    {
       "audience": [
         "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11"
       ],
