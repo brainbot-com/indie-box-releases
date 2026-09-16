@@ -388,12 +388,56 @@
       "id": "indie-chat",
       "name": "indie.chat",
       "scope": "public",
+      "variables": [
+        {
+          "description": "64 hex chars encrypting conversation titles, messages, agent transcripts and app state at rest. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\". Keep it safe and keep it stable -- changing it makes everything already stored unreadable.",
+          "label": "Encryption key",
+          "name": "INDIE_CHAT_ENCRYPTION_KEY",
+          "secret": true
+        },
+        {
+          "description": "The first owner account, created on first boot. Without it the image seeds its DEVELOPMENT accounts, whose passwords are published in the source repo.",
+          "label": "Admin email",
+          "name": "INDIE_CHAT_ADMIN_EMAIL"
+        },
+        {
+          "description": "Password for that first owner account. Only used on first boot; change it in the app afterwards.",
+          "label": "Admin password",
+          "name": "INDIE_CHAT_ADMIN_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Shown in the app for that account. Leave empty for: Admin",
+          "label": "Admin display name",
+          "name": "INDIE_CHAT_ADMIN_NAME",
+          "required": false
+        },
+        {
+          "description": "Which of the box's own Ollama models chat and the coding agents run on -- it has to be one the box has actually pulled. Leave empty for: qwen3.6:35b",
+          "label": "Model",
+          "name": "INDIE_CHAT_LLM_MODEL",
+          "required": false
+        },
+        {
+          "description": "Enables web search for chat, agents and routines. Set here rather than in the app's own settings: a key entered there lives in one browser and never reaches agent turns. Leave empty to disable web search.",
+          "label": "Web search key (Serper)",
+          "name": "INDIE_CHAT_SERPER_KEY",
+          "required": false,
+          "secret": true
+        }
+      ],
       "versions": [
         {
           "compose_path": "apps/indie-chat/0.1.0/compose.yml",
           "compose_sha256": "d9bc7c0060f370a2792ebd53093716f5e7281f937d3c5a2e04ccfeeca6060e80",
           "released_at": "2026-09-16T18:54:31Z",
           "version": "0.1.0"
+        },
+        {
+          "compose_path": "apps/indie-chat/0.1.1/compose.yml",
+          "compose_sha256": "56895719a0e9b9fdece6254c3e82b9838a653a0e9e11e83da6770234b9cab4d3",
+          "released_at": "2026-09-16T19:48:32Z",
+          "version": "0.1.1"
         }
       ]
     },

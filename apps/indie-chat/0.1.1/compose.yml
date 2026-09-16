@@ -1,0 +1,192 @@
+# indie.chat as an Indie Box app.
+# See brainbot-com/indie-box docs/app-integration.md: an app is a Compose
+# service carrying indiebox.app.* labels; the box derives the landing-page card,
+# a public port from the reserved 9200-9249 range, and the gateway route from
+# those labels.
+#
+#   indiebox/install.sh indie-chat indiebox/indie-chat.compose.yml <box-host>
+#
+# Three values have to come from the operator, and the app DECLARES them
+# (indiebox.app.var.* below) rather than expecting a hand-edited .env:
+#   INDIE_CHAT_ENCRYPTION_KEY   required — 64 hex chars (see below)
+#   INDIE_CHAT_ADMIN_EMAIL      required — the first owner account
+#   INDIE_CHAT_ADMIN_PASSWORD   required
+# The dashboard prompts for those on install, writes them to the box's shared
+# managed .env, and offers a Configure form afterwards. Installing from a
+# script (install.sh) instead? Pass them as the PUT's `variables` map, or put
+# them in that .env first — the ${VAR:?} references refuse to resolve without
+# them, so an install that would store conversations in plaintext, or seed the
+# image's published development accounts, fails instead of starting.
+#
+# Everything else has a working default. The few knobs worth changing per box
+# (admin display name, model, Serper key) are declared as optional variables;
+# the remaining INDIE_CHAT_* below stay .env-only escape hatches, so their
+# defaults here keep tracking releases. The chat talks to the box's own Ollama
+# on the shared `llm` network, so a box with no internet still runs it.
+
+services:
+
+  # ---- the app: the ONE labelled service, so the ONE gateway route ----------
+  indie-chat:
+    image: ghcr.io/brainbot-com/indie-chat:${INDIE_CHAT_TAG:-0.1.1}
+    # "stable" normally; "encrypted" on boxes with encrypted storage, which
+    # makes this wait for the unlock. Conversations, the wiki and agent
+    # workspaces are all user content, so it opts in.
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.app.name: "indie.chat"
+      indiebox.app.icon: "message-chatbot"
+      # The port INSIDE the container. The gateway forwards its public port
+      # here; the app must never publish a host port itself.
+      indiebox.app.http-port: "3000"
+      # App version (read straight off this label by GET /v1/apps). This IS the
+      # release: it equals the git tag (v<version>) and the tag both images
+      # above are pinned to. A LITERAL, not an interpolation -- a box has to
+      # report the version it is running, and `${INDIE_CHAT_TAG}` reports the
+      # name of a variable. Written by indiebox/pin-images.sh together with
+      # those defaults, so the three move as one; do not edit by hand.
+      # 0.0.0 until the first release is cut.
+      indiebox.app.version: "0.1.1"
+      # Short catalog description (indie-box's registry sync reads it off this
+      # label rather than repeating it in the manifest).
+      indiebox.app.description: "Private chat, coding agents and a shared wiki over the box's own models."
+
+      # ---- the values the operator supplies (docs/app-integration.md,
+      #      "Required variables") ------------------------------------------
+      # Declaring them is what makes the dashboard PROMPT for them at install
+      # and offer a Configure form later; the values land in the box's shared
+      # managed .env, which is where the ${...} references below read them
+      # from. Without these labels the box asks for nothing, the three
+      # ${VAR:?} references cannot resolve, and installing this app from the
+      # Apps page fails outright -- the only way in would be hand-editing the
+      # box .env over SSH.
+      # NB `required` defaults to TRUE, so every optional one says so out loud.
+      # NB no `.default` on the optional ones on purpose: a declared default is
+      # PERSISTED to the .env at install, and a value in the .env then outranks
+      # the `${VAR:-...}` fallback here forever -- a later release could never
+      # move that default again. With no default here nothing is written
+      # unless the operator types something, so the fallback below stays
+      # authoritative and the description names it.
+      indiebox.app.var.INDIE_CHAT_ENCRYPTION_KEY.label: "Encryption key"
+      indiebox.app.var.INDIE_CHAT_ENCRYPTION_KEY.description: "64 hex chars encrypting conversation titles, messages, agent transcripts and app state at rest. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\". Keep it safe and keep it stable -- changing it makes everything already stored unreadable."
+      indiebox.app.var.INDIE_CHAT_ENCRYPTION_KEY.required: "true"
+      indiebox.app.var.INDIE_CHAT_ENCRYPTION_KEY.secret: "true"
+
+      indiebox.app.var.INDIE_CHAT_ADMIN_EMAIL.label: "Admin email"
+      indiebox.app.var.INDIE_CHAT_ADMIN_EMAIL.description: "The first owner account, created on first boot. Without it the image seeds its DEVELOPMENT accounts, whose passwords are published in the source repo."
+      indiebox.app.var.INDIE_CHAT_ADMIN_EMAIL.required: "true"
+
+      indiebox.app.var.INDIE_CHAT_ADMIN_PASSWORD.label: "Admin password"
+      indiebox.app.var.INDIE_CHAT_ADMIN_PASSWORD.description: "Password for that first owner account. Only used on first boot; change it in the app afterwards."
+      indiebox.app.var.INDIE_CHAT_ADMIN_PASSWORD.required: "true"
+      indiebox.app.var.INDIE_CHAT_ADMIN_PASSWORD.secret: "true"
+
+      indiebox.app.var.INDIE_CHAT_ADMIN_NAME.label: "Admin display name"
+      indiebox.app.var.INDIE_CHAT_ADMIN_NAME.description: "Shown in the app for that account. Leave empty for: Admin"
+      indiebox.app.var.INDIE_CHAT_ADMIN_NAME.required: "false"
+
+      indiebox.app.var.INDIE_CHAT_LLM_MODEL.label: "Model"
+      indiebox.app.var.INDIE_CHAT_LLM_MODEL.description: "Which of the box's own Ollama models chat and the coding agents run on -- it has to be one the box has actually pulled. Leave empty for: qwen3.6:35b"
+      indiebox.app.var.INDIE_CHAT_LLM_MODEL.required: "false"
+
+      indiebox.app.var.INDIE_CHAT_SERPER_KEY.label: "Web search key (Serper)"
+      indiebox.app.var.INDIE_CHAT_SERPER_KEY.description: "Enables web search for chat, agents and routines. Set here rather than in the app's own settings: a key entered there lives in one browser and never reaches agent turns. Leave empty to disable web search."
+      indiebox.app.var.INDIE_CHAT_SERPER_KEY.required: "false"
+      indiebox.app.var.INDIE_CHAT_SERPER_KEY.secret: "true"
+
+    environment:
+      PORT: "3000"
+      PYTHON: /opt/venv/bin/python
+
+      # ---- state -----------------------------------------------------------
+      # SQLite + the encryption key file live on the box's data dir, never in
+      # the container, so an image update keeps every conversation.
+      INDIE_DATA_DIR: /data
+      # Encryption at rest for conversation titles + messages. Generate with:
+      #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      # Required on purpose: `compose config` fails without it rather than
+      # silently starting a box that stores plaintext.
+      ENCRYPTION_KEY: ${INDIE_CHAT_ENCRYPTION_KEY:?set INDIE_CHAT_ENCRYPTION_KEY in the box .env}
+      # First-boot owner. Without these the image seeds its DEVELOPMENT accounts,
+      # which carry published passwords — never what you want on a real box.
+      INDIE_ADMIN_EMAIL: ${INDIE_CHAT_ADMIN_EMAIL:?set INDIE_CHAT_ADMIN_EMAIL in the box .env}
+      INDIE_ADMIN_PASSWORD: ${INDIE_CHAT_ADMIN_PASSWORD:?set INDIE_CHAT_ADMIN_PASSWORD in the box .env}
+      INDIE_ADMIN_NAME: ${INDIE_CHAT_ADMIN_NAME:-Admin}
+
+      # ---- this deployment's identity (optional) ---------------------------
+      # Brand, theme, LLM catalog, extra app templates and wiki seed pages. An
+      # app install uploads only this Compose file, so drop the files on the box
+      # at <data>/indie-chat/config first; absent is fine (built-in defaults).
+      INDIE_CONFIG_DIR: /config
+      # Turn the shared wiki + Brain/Wiki apps off with: INDIE_MODULES=""
+      INDIE_MODULES: ${INDIE_CHAT_MODULES:-brain}
+
+      # ---- LLM: the box's own Ollama, by service name on the `llm` network --
+      # No IPs anywhere: `ollama` resolves on the shared network, and naming it
+      # here also allow-lists it (a host the deployment configured is a host it
+      # means to reach).
+      EXTRA_ALLOWED_HOSTS: ${INDIE_CHAT_LLM_HOST:-ollama}
+      AGENT_CUSTOM_BACKEND_URL: http://${INDIE_CHAT_LLM_HOST:-ollama}:${INDIE_CHAT_LLM_PORT:-11434}/v1/chat/completions
+      AGENT_CUSTOM_BACKEND_MODEL: ${INDIE_CHAT_LLM_MODEL:-qwen3.6:35b}
+      AGENT_CUSTOM_BACKEND_LABEL: ${INDIE_CHAT_LLM_LABEL:-Local Ollama (indie.box)}
+      # pi rejects a keyless provider; local Ollama needs no auth.
+      AGENT_CUSTOM_BACKEND_KEY: "none"
+
+      # ---- coding agents ---------------------------------------------------
+      # Per-turn containers. They join `llm`, so they reach Ollama AND this
+      # server by SERVICE NAME — which is why the callback needs no IP.
+      AGENT_IMAGE: ghcr.io/brainbot-com/indie-agent:${INDIE_CHAT_TAG:-0.1.1}
+      AGENT_NETWORK: llm
+      AGENT_CALLBACK_HOST: indie-chat
+      AGENT_MEMORY: ${INDIE_CHAT_AGENT_MEMORY:-1g}
+      AGENT_CPUS: ${INDIE_CHAT_AGENT_CPUS:-1}
+      AGENT_MAX_CONCURRENT: ${INDIE_CHAT_AGENT_CONCURRENCY:-3}
+      # The shared wiki's volume, namespaced so a second install on the same box
+      # does not silently share one brain.
+      AGENT_WIKI_VOLUME: indie-chat-wiki
+
+      # ---- optional ---------------------------------------------------------
+      # The gateway terminates HTTPS, so HSTS is safe to send.
+      INDIE_HSTS: "1"
+      SERPER_KEY: ${INDIE_CHAT_SERPER_KEY:-}
+      MCP_SERVERS: ${INDIE_CHAT_MCP_SERVERS:-[]}
+    volumes:
+      # Absolute paths under the data dir: only the Compose file is uploaded, so
+      # a relative source would resolve to a directory that does not exist.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-chat/data:/data
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-chat/config:/config:ro
+      # Agents run as sibling containers launched over this socket. It is the
+      # privileged part of the design: an RCE in the app is host root. The agent
+      # containers themselves never see the socket, run --cap-drop ALL with
+      # no-new-privileges, and get only their own workspace volume.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - default
+      - llm
+    depends_on:
+      # Refuses to start unless the encrypted volume is actually mounted.
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- get the agent image onto the box --------------------------------------
+  # The coding agents are short-lived per-turn containers the server launches
+  # from AGENT_IMAGE over the socket, so they are not a service and nothing here
+  # needs to stay up. But the image must BE on the box: the agent engine gate
+  # hides the composer until `docker image inspect` succeeds, and Compose only
+  # pulls images it can see on a service. Naming it here is what makes
+  # `docker compose up` (the install/update path) pull it. It carries no
+  # indiebox.app.* label, so it is not a card of its own.
+  indie-chat-agent-image:
+    image: ghcr.io/brainbot-com/indie-agent:${INDIE_CHAT_TAG:-0.1.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: "no"
+    command: ["sh", "-c", "echo indie-agent image present on the box"]
+
+networks:
+  default:
+  # Platform-provided shared network (app-integration.md "Platform contract").
+  llm:
+    name: llm
