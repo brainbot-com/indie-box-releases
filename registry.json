@@ -497,7 +497,7 @@
           "secret": true
         },
         {
-          "description": "Zugang zum StudioLLM-Gateway (Qwen 3.6 35B auf der RTX 5090, GLM 5.2). Darauf laufen die Coding-Agenten und die StudioLLM-Modelle im Chat; die Vorgabe im Chat ist das Ollama der Box und braucht ihn nicht. Die Box braucht daf\u00fcr ausgehenden Zugang zu studiollm.brainbot.com.",
+          "description": "Zugang zum StudioLLM-Gateway (Qwen 3.6 35B auf der RTX 5090, GLM 5.2), die zweite Wahl in Chat und Agent-Engine. Die Vorgabe ist jeweils das Ollama der Box und braucht ihn nicht. Die Box braucht daf\u00fcr ausgehenden Zugang zu studiollm.brainbot.com.",
           "label": "StudioLLM-Schl\u00fcssel",
           "name": "KREYSCH_STUDIOLLM_KEY",
           "secret": true
@@ -547,6 +547,12 @@
           "compose_sha256": "f58bc92a6cfd1378a80cd8b175005d38ee52af7b3709789363f4d0f832a71cff",
           "released_at": "2026-09-21T15:20:38Z",
           "version": "0.1.4"
+        },
+        {
+          "compose_path": "apps/kreysch-chat/0.1.5/compose.yml",
+          "compose_sha256": "db570718166a548a6e0bc793ef5ffb1359deeeac7b20f6afbfa185eb631f40c9",
+          "released_at": "2026-09-21T16:13:17Z",
+          "version": "0.1.5"
         }
       ]
     }
