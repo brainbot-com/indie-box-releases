@@ -555,6 +555,33 @@
           "version": "0.1.5"
         }
       ]
+    },
+    {
+      "audience": [
+        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
+        "9c9d7eb1ff3a999561cb7d4760cdd85228f9470734ed701a58ded4453ef57679"
+      ],
+      "description": "Belegte Antworten zu VdS 10100 und NIS-2/BSIG, mit Fundstelle aus der eigenen Wissensbasis.",
+      "icon": "certificate",
+      "id": "vds10100-companion",
+      "name": "VDS10100 Companion",
+      "scope": "private",
+      "variables": [
+        {
+          "description": "Pflicht f\u00fcr den Start au\u00dferhalb von localhost. Gilt als normales MCP-Zugangstoken; weitere lassen sich sp\u00e4ter \u00fcber die Oberfl\u00e4che anlegen und einzeln widerrufen.",
+          "label": "Zugangstoken (MCP)",
+          "name": "VDS10100_COMPANION_HTTP_TOKEN",
+          "secret": true
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/vds10100-companion/0.1.2/compose.yml",
+          "compose_sha256": "1d7e9b0928b2931136387ecb943b228515fa46fb6461c4d94909efb2511eab01",
+          "released_at": "2026-09-22T16:58:47Z",
+          "version": "0.1.2"
+        }
+      ]
     }
   ],
   "schema_version": 1
