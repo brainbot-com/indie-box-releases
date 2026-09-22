@@ -1,0 +1,252 @@
+# kreysch-chat als EINE Indie-Box-App (siehe brainbot-com/indie-box
+# docs/app-integration.md: eine App ist ein Compose-Dienst mit indiebox.app.*-
+# Labels; die Box leitet daraus die Kachel auf der Startseite, einen
+# öffentlichen Port aus dem reservierten Bereich 9200-9249 und die
+# Gateway-Route ab).
+#
+# Installiert wird sie normalerweise aus dem Katalog (Admin > Apps), weil sie
+# dort als private App für den Mandanten `kreysch` eingetragen ist. Von Hand
+# geht auch:
+#
+#   indiebox/install.sh kreysch-chat indiebox/kreysch-chat.compose.yml <box-host>
+#
+# Anders als bei crefo braucht es hier KEINEN Caddy-Pfadrouter: die App hat nur
+# eine öffentliche Oberfläche (den Chat). Der MCP-Sidecar bleibt intern auf dem
+# gemeinsamen `llm`-Netz und bekommt darum auch kein indiebox.app.*-Label.
+#
+# Die Werte, die der Betrieb setzen muss, sind unten als
+# indiebox.app.var.*-Labels deklariert. Die Box fragt sie bei der Installation
+# ab, legt sie in ihrer gemeinsamen .env ab und lässt sie später über
+# „Configure" ändern — niemand muss die .env mehr über SSH anfassen. Ein
+# `docker compose` von Hand liest dieselben Namen aus derselben .env.
+#
+# LLM: Chat und Coding-Agenten bieten zuerst die Modelle der Box an (das
+# Ollama auf dem gemeinsamen `llm`-Netz, qwen3.8:27b als Vorgabe und
+# qwen3.6:35b), dahinter den StudioLLM-Gateway und IndieRouter. Katalog und
+# Engines dafür sind indiebox/providers.json und indiebox/agent-backends.json,
+# im Image als /config-indiebox; INDIE_CONFIG_DIR unten zeigt darauf. Für die
+# StudioLLM-Einträge braucht die Box ausgehenden Zugang zu
+# studiollm.brainbot.com.
+#
+# Die Image-Tags unten sind auf die Version dieser Datei gepinnt und werden von
+# `indiebox/pin-images.sh` zusammen mit dem indiebox.app.version-Label
+# geschrieben — nicht von Hand ändern, sonst meldet die Box eine Version, deren
+# Images sie nicht fährt. Ein KREYSCH_*_TAG in der .env der Box übersteuert den
+# Pin für genau diese eine Komponente (so wird :next probiert und ein einzelner
+# Dienst zurückgerollt).
+#
+# Die Images sind noch NICHT gebaut und liegen nicht in GHCR. Der
+# Katalogeintrag verteilt nur diese Datei; eine Installation scheitert, bis
+# die Images unter dem gepinnten Tag da sind — siehe indiebox/README.md.
+
+services:
+
+  # ---- die App: der EINE gelabelte Dienst, also die EINE Gateway-Route -------
+  kreysch-chat:
+    image: ghcr.io/brainbot-com/kreysch-chat:${KREYSCH_CHAT_TAG:-0.1.6}
+    # "stable" im Normalfall, "encrypted" auf Boxen mit verschlüsseltem
+    # Speicher — dann wartet der Dienst auf das Entsperren. Unterhaltungen,
+    # Wiki und Agent-Workspaces sind Nutzerinhalte, also nimmt die App das mit.
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.app.name: "kreysch:chat"
+      # Aus der Auswahlliste in dashboard/frontend/src/services/appIcons.ts.
+      # Ein unbekanntes Kürzel fällt still auf ein generisches Symbol zurück,
+      # also nur Namen von dort verwenden.
+      indiebox.app.icon: "message"
+      # Kurzbeschreibung für den Katalog; `registry sync` liest sie von hier,
+      # damit registry.json.in sie nicht wiederholen muss.
+      indiebox.app.description: "Privater KI-Chat für Kreysch: Unterhaltungen, Coding-Agenten und der Fachdaten-MCP als eine App."
+      # Der Port INNERHALB des Containers. Das Gateway leitet seinen
+      # öffentlichen Port hierher; die App veröffentlicht nie selbst einen.
+      indiebox.app.http-port: "3000"
+      # WÖRTLICH, nie interpoliert: die Box liest dieses Label direkt aus der
+      # installierten Datei, um die laufende Version zu melden — ein
+      # ${...} davor meldete den Ausdruck, nicht die Version. Gleich dem
+      # Git-Tag (v<version>) und dem Tag, auf den jedes Image oben gepinnt ist.
+      indiebox.app.version: "0.1.6"
+
+      # ---- vom Betrieb gesetzte Werte (indie-box „Required variables") ------
+      # Jeder <NAME> ist genau die Umgebungsvariable, die unten als ${<NAME>}
+      # steht; der Wert liegt einmal in der gemeinsamen .env der Box und löst
+      # für jeden Compose-Aufruf dort auf.
+      #
+      # Pflicht — ohne Schlüssel läge alles im Klartext auf der Platte.
+      indiebox.app.var.KREYSCH_CHAT_ENCRYPTION_KEY.label: "Verschlüsselungsschlüssel"
+      indiebox.app.var.KREYSCH_CHAT_ENCRYPTION_KEY.description: "64 Hex-Zeichen, verschlüsseln Titel und Nachrichten im Ruhezustand. Erzeugen mit: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+      indiebox.app.var.KREYSCH_CHAT_ENCRYPTION_KEY.required: "true"
+      indiebox.app.var.KREYSCH_CHAT_ENCRYPTION_KEY.secret: "true"
+      # Pflicht — ohne diese Werte legt das Image seine ENTWICKLUNGS-Konten an,
+      # mit veröffentlichten Passwörtern.
+      indiebox.app.var.KREYSCH_CHAT_ADMIN_EMAIL.label: "E-Mail des ersten Kontos"
+      indiebox.app.var.KREYSCH_CHAT_ADMIN_EMAIL.description: "Das erste Eigentümer-Konto. Ohne diesen Wert legt das Image seine Entwicklungskonten mit veröffentlichten Passwörtern an."
+      indiebox.app.var.KREYSCH_CHAT_ADMIN_EMAIL.required: "true"
+      indiebox.app.var.KREYSCH_CHAT_ADMIN_PASSWORD.label: "Passwort des ersten Kontos"
+      indiebox.app.var.KREYSCH_CHAT_ADMIN_PASSWORD.description: "Passwort für das erste Eigentümer-Konto. Nach der ersten Anmeldung in der App änderbar."
+      indiebox.app.var.KREYSCH_CHAT_ADMIN_PASSWORD.required: "true"
+      indiebox.app.var.KREYSCH_CHAT_ADMIN_PASSWORD.secret: "true"
+      # Pflicht — sonst antwortet kein Modell.
+      indiebox.app.var.KREYSCH_STUDIOLLM_KEY.label: "StudioLLM-Schlüssel"
+      indiebox.app.var.KREYSCH_STUDIOLLM_KEY.description: "Zugang zum StudioLLM-Gateway (Qwen 3.6 35B auf der RTX 5090, GLM 5.2), die zweite Wahl in Chat und Agent-Engine. Die Vorgabe ist jeweils das Ollama der Box und braucht ihn nicht. Die Box braucht dafür ausgehenden Zugang zu studiollm.brainbot.com."
+      indiebox.app.var.KREYSCH_STUDIOLLM_KEY.required: "true"
+      indiebox.app.var.KREYSCH_STUDIOLLM_KEY.secret: "true"
+      # Optional — leer heißt: der MCP-Sidecar prüft nichts.
+      indiebox.app.var.KREYSCH_MCP_TOKEN.label: "MCP-Token"
+      indiebox.app.var.KREYSCH_MCP_TOKEN.description: "Bearer-Token, das der Fachdaten-MCP auf jeder Anfrage verlangt. Leer lassen schaltet die Prüfung ab; auf einer Box mit mehreren Nutzern setzen."
+      indiebox.app.var.KREYSCH_MCP_TOKEN.required: "false"
+      indiebox.app.var.KREYSCH_MCP_TOKEN.secret: "true"
+      # Optional — Websuche im Chat.
+      indiebox.app.var.KREYSCH_SERPER_KEY.label: "Serper-Schlüssel (Websuche)"
+      indiebox.app.var.KREYSCH_SERPER_KEY.description: "Schlüssel für serper.dev. Leer lassen, wenn die Websuche im Chat aus bleiben soll."
+      indiebox.app.var.KREYSCH_SERPER_KEY.required: "false"
+      indiebox.app.var.KREYSCH_SERPER_KEY.secret: "true"
+    environment:
+      PORT: "3000"
+      PYTHON: /opt/venv/bin/python
+
+      # ---- Zustand ---------------------------------------------------------
+      # SQLite und die Schlüsseldatei liegen auf dem Datenverzeichnis der Box,
+      # nie im Container — ein Image-Update behält damit jede Unterhaltung.
+      INDIE_DATA_DIR: /data
+      # Absichtlich Pflicht: `compose config` scheitert ohne den Wert, statt
+      # still eine Box zu starten, die im Klartext speichert. Die Box fragt ihn
+      # bei der Installation ab (Label oben), die Prüfung läuft gegen eine
+      # Wegwerf-Kopie der .env mit den eingegebenen Werten.
+      ENCRYPTION_KEY: ${KREYSCH_CHAT_ENCRYPTION_KEY:?set KREYSCH_CHAT_ENCRYPTION_KEY in the box .env}
+      INDIE_ADMIN_EMAIL: ${KREYSCH_CHAT_ADMIN_EMAIL:?set KREYSCH_CHAT_ADMIN_EMAIL in the box .env}
+      INDIE_ADMIN_PASSWORD: ${KREYSCH_CHAT_ADMIN_PASSWORD:?set KREYSCH_CHAT_ADMIN_PASSWORD in the box .env}
+      INDIE_ADMIN_NAME: ${KREYSCH_CHAT_ADMIN_NAME:-Admin}
+
+      # ---- LLM: die Modelle der Box zuerst, dann StudioLLM -----------------
+      # Modellkatalog (indiebox/providers.json) und Agent-Engines
+      # (indiebox/agent-backends.json) der Box: das Ollama der Indie Box unter
+      # seinem Dienstnamen auf dem `llm`-Netz, mit qwen3.8:27b als Vorgabe und
+      # qwen3.6:35b daneben, danach StudioLLM und IndieRouter. Das Image trägt
+      # beides als zweite Kopie von config/ unter /config-indiebox; ohne diese
+      # Zeile läse es /config, dessen Vorgabe StudioLLM ist (Dev-Setup und
+      # Host-Deploy). Keine IP: `ollama` löst auf
+      # dem gemeinsamen Netz auf, und ein Host, den der Katalog nennt, ist
+      # damit auch erlaubt. EXTRA_ALLOWED_HOSTS nennt ihn trotzdem noch einmal,
+      # so wie upstreams eigene Box-Datei. Auf einem älteren Image, das den
+      # Katalog noch nicht selbst in die Allowlist nimmt, wäre der Aufruf
+      # sonst ein 403. Ollama verlangt keinen Schlüssel, der Proxy schickt
+      # dorthin also keinen.
+      INDIE_CONFIG_DIR: /config-indiebox
+      EXTRA_ALLOWED_HOSTS: ollama
+      # StudioLLM und IndieRouter: der Schlüssel wird serverseitig pro Zielhost
+      # injiziert und erreicht weder Browser noch Image.
+      STUDIOLLM_KEY: ${KREYSCH_STUDIOLLM_KEY:?set KREYSCH_STUDIOLLM_KEY in the box .env}
+      INDIEROUTER_KEY: ${KREYSCH_INDIEROUTER_KEY:-}
+      # Die Agent-Engines auf dem Ollama der Box tragen apiKey "none": pi im
+      # Agent-Container lehnt einen Provider ohne Schlüssel ab, Ollama prüft
+      # ihn nicht. Vorgabe-Engine ist die erste in agent-backends.json, solange
+      # kein Admin in Settings → Agent engine eine andere gewählt hat; eine
+      # dort gespeicherte Wahl bleibt bestehen.
+
+      # ---- Coding-Agents ---------------------------------------------------
+      # Container pro Zug. Sie hängen an `llm`, erreichen darüber diesen
+      # Server und den MCP-Sidecar per Dienstnamen — deshalb braucht der
+      # Rückruf keine IP.
+      AGENT_IMAGE: ghcr.io/brainbot-com/kreysch-agent:${KREYSCH_AGENT_TAG:-0.1.6}
+      AGENT_NETWORK: llm
+      AGENT_CALLBACK_HOST: kreysch-chat
+      # Die eingeschränkten Stufen unter Settings → Agent network access
+      # („nur Websuche", „kein Internet") setzen die Zug-Container NICHT auf
+      # `llm`, sondern auf ein eigenes Agent-Netz, und pi ruft das Modell dann
+      # über diesen Server ab (POST /api/agent-llm), der es an Ollama
+      # weiterreicht. Dafür muss `kreysch-chat` AUF diesem Netz auflösen,
+      # sonst endet jeder Zug mit „Model error: Connection error." (so auf
+      # einer Box gesehen, September 2026). Darum ist das Netz hier unten
+      # deklariert und dieser Dienst hängt daran; der Server findet es unter
+      # diesem Namen und legt kein eigenes an. Der Name ist absichtlich nicht
+      # upstreams `indie-agent-net`: ein Netz, das der Server schon selbst
+      # angelegt hat, trägt kein Compose-Label, und `compose up` wiese es ab.
+      AGENT_NET: kreysch-agent-net
+      AGENT_MEMORY: ${KREYSCH_AGENT_MEMORY:-1g}
+      AGENT_CPUS: ${KREYSCH_AGENT_CPUS:-1}
+      AGENT_MAX_CONCURRENT: ${KREYSCH_AGENT_CONCURRENCY:-3}
+      # Volume des gemeinsamen Wikis, benannt, damit eine zweite Installation
+      # auf derselben Box nicht still dasselbe Gehirn mitbenutzt.
+      AGENT_WIKI_VOLUME: kreysch-chat-wiki
+
+      # ---- Sonstiges -------------------------------------------------------
+      # Das Gateway terminiert HTTPS, HSTS ist damit gefahrlos.
+      INDIE_HSTS: "1"
+      SERPER_KEY: ${KREYSCH_SERPER_KEY:-}
+      MCP_SERVERS: "[]"
+    volumes:
+      # Absolute Pfade unter dem Datenverzeichnis: hochgeladen wird nur die
+      # Compose-Datei, ein relativer Pfad zeigte auf ein Verzeichnis, das es
+      # dort nicht gibt.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/kreysch/chat:/data
+      # Agents laufen als Geschwister-Container, gestartet über diesen Socket.
+      # Das ist der privilegierte Teil: ein RCE in der App ist Host-Root. Die
+      # Agent-Container selbst sehen den Socket nie, laufen mit --cap-drop ALL
+      # und no-new-privileges und bekommen nur ihr eigenes Workspace-Volume.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - default
+      - llm
+      - agent
+    depends_on:
+      # Startet nicht, solange das verschlüsselte Volume nicht eingehängt ist.
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- Agent-Image auf die Box holen ----------------------------------------
+  # Die Coding-Agents sind kurzlebige Container pro Zug, die der Server über
+  # den Socket aus AGENT_IMAGE startet — also kein Dienst, hier muss nichts
+  # laufen bleiben. Das Image muss aber AUF der Box sein: die Agent-Engine
+  # blendet den Eingabebereich aus, bis `docker image inspect` gelingt, und
+  # Compose zieht nur Images, die es an einem Dienst sieht. Diese Nennung ist
+  # der Grund, warum `docker compose up` (der Installations- und Update-Weg)
+  # es holt. Kein indiebox.app.*-Label, also auch keine eigene Kachel.
+  kreysch-agent-image:
+    image: ghcr.io/brainbot-com/kreysch-agent:${KREYSCH_AGENT_TAG:-0.1.6}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: "no"
+    command: ["sh", "-c", "echo kreysch-agent image present on the box"]
+
+  # ---- Fachdaten-MCP (Chat-Werkzeuge + Agenten) ------------------------------
+  # Intern, ohne Gateway-Route. In der App einmal als GLOBALE MCP-Zeile
+  # eintragen: url=http://kreysch-mcp:9100/mcp, Header
+  # Authorization: Bearer …
+  # Auf `llm`, damit die Agent-Container ihn unter derselben URL erreichen wie
+  # der Chat.
+  kreysch-mcp:
+    image: ghcr.io/brainbot-com/kreysch-mcp:${KREYSCH_MCP_TAG:-0.1.6}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "9100"
+      # Leer = Authentifizierung aus. Auf einer Box mit mehreren Nutzern setzen.
+      MCP_TOKEN: ${KREYSCH_MCP_TOKEN:-}
+    # Sobald eine Datenquelle angebunden ist, hier read-only mounten:
+    # volumes:
+    #   - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/kreysch/kreysch.duckdb:/data/kreysch.duckdb:ro
+    networks:
+      - default
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+networks:
+  default:
+  # Von der Plattform bereitgestelltes gemeinsames Netz (app-integration.md,
+  # "Platform contract").
+  llm:
+    name: llm
+  # Das Netz der Zug-Container auf den eingeschränkten Egress-Stufen (AGENT_NET
+  # oben). Nur dieser Dienst hängt daran, damit die Container ihn unter seinem
+  # Dienstnamen erreichen; Ollama und der MCP-Sidecar bleiben auf `llm` und
+  # werden von dort aus über den Server vermittelt. Eine Firewall auf dem
+  # Netz gibt es auf der Box nicht (upstreams agent-egress-firewall.sh läuft
+  # dort nicht), die Stufe schaltet also nur die Vermittlung um, kein Verbot.
+  agent:
+    name: kreysch-agent-net
