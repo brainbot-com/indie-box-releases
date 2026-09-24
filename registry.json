@@ -619,6 +619,12 @@
           "compose_sha256": "557d11ef6305b752bfa725e79030d51b0913728b4a6d42f8a4dd95fc21947da7",
           "released_at": "2026-09-24T12:49:28Z",
           "version": "0.2.0"
+        },
+        {
+          "compose_path": "apps/vds10100-companion/0.2.1/compose.yml",
+          "compose_sha256": "06cba1e796a156d4f596d4af48f6b6fab2edcc4d031943ff263ae2be032fbf47",
+          "released_at": "2026-09-24T13:46:45Z",
+          "version": "0.2.1"
         }
       ]
     }
