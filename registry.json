@@ -592,9 +592,18 @@
       "scope": "private",
       "variables": [
         {
-          "description": "Pflicht f\u00fcr den Start au\u00dferhalb von localhost. Gilt als normales MCP-Zugangstoken; weitere lassen sich sp\u00e4ter \u00fcber die Oberfl\u00e4che anlegen und einzeln widerrufen.",
-          "label": "Zugangstoken (MCP)",
-          "name": "VDS10100_COMPANION_HTTP_TOKEN",
+          "default": "admin",
+          "description": "Damit melden Sie sich in der Web-Oberfl\u00e4che des Companion an.",
+          "label": "Benutzername der Oberfl\u00e4che",
+          "name": "VDS10100_COMPANION_USERNAME",
+          "required": false
+        },
+        {
+          "default": "admin",
+          "description": "Zusammen mit dem Benutzernamen f\u00fcr die Web-Oberfl\u00e4che. Vorbelegt ist admin; bitte \u00e4ndern, wenn die Box aus dem Internet erreichbar ist. MCP-Zugangstokens legen Sie danach in der Oberfl\u00e4che an.",
+          "label": "Passwort der Oberfl\u00e4che",
+          "name": "VDS10100_COMPANION_PASSWORD",
+          "required": false,
           "secret": true
         }
       ],
@@ -604,6 +613,12 @@
           "compose_sha256": "1d7e9b0928b2931136387ecb943b228515fa46fb6461c4d94909efb2511eab01",
           "released_at": "2026-09-22T16:58:47Z",
           "version": "0.1.2"
+        },
+        {
+          "compose_path": "apps/vds10100-companion/0.2.0/compose.yml",
+          "compose_sha256": "557d11ef6305b752bfa725e79030d51b0913728b4a6d42f8a4dd95fc21947da7",
+          "released_at": "2026-09-24T12:49:28Z",
+          "version": "0.2.0"
         }
       ]
     }
