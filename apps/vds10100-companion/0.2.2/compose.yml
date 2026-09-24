@@ -1,0 +1,93 @@
+# VDS10100 Companion als Indie-Box-App (ADR-016).
+#
+# Nicht für den öffentlichen Katalog: ein privater Eintrag im Katalog von brainbot-com/indie-box, sichtbar
+# nur für die Zielboxen (ADR-018), Updates über den Release-Workflow. Alternativ direkt über die HTTP-API
+# der Box (docs/indie-box-app-vertrag.md, "HTTP-API der Box"):
+#
+#   PUT /api/docker-controller/v1/apps/vds10100-companion
+#   Body: {"compose_yaml": "<Inhalt dieser Datei>",
+#          "variables": {"VDS10100_COMPANION_USERNAME": "admin", "VDS10100_COMPANION_PASSWORD": "<Passwort>"}}
+#   (Beide optional, vorbelegt admin/admin, jederzeit unter /admin/apps, Configure, änderbar.)
+#
+# Shape der App: EIN Service, EIN Port. Web-Oberfläche, /mcp und /api laufen auf demselben uvicorn-
+# Prozess (Dockerfile im Projektwurzel, CMD "vds-kb serve --http"), wie im lokalen Betrieb
+# (scripts/companion, ADR-010). Keine zweite, eigene Datenbank wie beim Lead Profiler: SQLite reicht,
+# die Datei liegt im selben Volume wie alles andere unter /data.
+#
+# - Genau ein Service trägt indiebox.app.* Labels; die Box liest daraus Kachel, Gateway-Route und
+#   installierte Version.
+# - Kein ports: (das Gateway besitzt die externen Ports), kein build: (Image kommt fertig aus der
+#   Registry, gepinnt auf eine Version, nie :latest).
+# - Bind-Mount ist die verschlüsselte-Speicher-Dreizeile (indie-box-app-vertrag.md): Profil plus
+#   secure-gate plus ein absoluter Pfad unter SECURE_STORAGE_DIR/DATA_DIR.
+# - Kein user:: Docker legt das Host-Verzeichnis beim ersten Start als root:root an, und der Prozess
+#   selbst läuft ohnehin als root im Image (kein USER im Dockerfile) — bestätigt im Test-Container.
+# - indiebox.pause-for-backup: hier liegt die einzige Datenbank der App (kb.sqlite), also gehört die
+#   Backup-Pause auf DIESEN einen Service.
+# - Netz "llm": das eigene Ollama der Box ist darüber als http://ollama:11434 erreichbar (nie hier
+#   definiert, das ist Sache der Plattform). VDS_KB_EMBEDDING_PROFILE=box nutzt genau das, siehe
+#   config.py und docs/indie-box-app-vertrag.md ("Embeddings auf der eigenen Box").
+# - default bleibt zusätzlich zu llm stehen: nur llm einzutragen würde der App ihr Default-Netz nehmen
+#   und sie trotz laufendem Container von der Kachel/vom Gateway aus unerreichbar machen (stiller
+#   Ausfall laut indie-box-app-vertrag.md, "Die Fallen die Geld kosten").
+# - Kein Token bei der Installation (ADR-019). Variablen sind Benutzername und Passwort der Oberfläche
+#   (ADR-025), beide optional und vorbelegt admin/admin; solange das gilt, warnt die Einrichtung. Ein
+#   Wechsel unter /admin/apps legt den Container neu an, das setzt auch die Sperre nach Fehlversuchen
+#   zurück. MCP-Zugangstokens entstehen erst in der Oberfläche; bis dahin antwortet /mcp nur "noch nicht
+#   eingerichtet".
+# - Updates verlieren nichts (ADR-026): alles, was der Betreiber einrichtet, liegt unter /data, und das
+#   Volume bleibt bei Update und Deinstallation liegen. tests/test_update.py sichert das in der CI ab.
+# - Der Image-Verweis unten ist die EINZIGE Zeile in dieser Datei, die die Registry nennen darf. Der
+#   Release-Weg (ADR-018, .github/workflows/release.yml) schreibt den Vorgabewert hinter ":-" und das
+#   Label indiebox.app.version zusammen um, und indiebox/pin-images.sh zählt dafür die Vorkommen exakt:
+#   eine weitere Erwähnung des Registry-Hosts, auch als Kommentar, lässt den nächsten Release scheitern.
+#   Deshalb steht hier bewusst kein zweiter Verweis, auch kein erklärender.
+# - Version und Image-Tag gehören zusammen und werden nie von Hand gesetzt, sondern nur vom Release.
+
+services:
+  vds10100-companion: # der gelabelte Service; Name == App-ID
+    image: ghcr.io/brainbot-com/vds10100-companion:${VDS10100_COMPANION_TAG:-0.2.2}
+    profiles: ["${SECURE_STORAGE_PROFILE:-stable}"]
+    restart: always
+    labels:
+      indiebox.app.name: "VDS10100 Companion"
+      indiebox.app.icon: "certificate" # vorläufige Annahme, wie bei anderen App-Icons
+      indiebox.app.http-port: "8765"
+      indiebox.app.version: "0.2.2"
+      indiebox.app.description: "Belegte Antworten zu VdS 10100 und NIS-2/BSIG, mit Fundstelle aus der eigenen Wissensbasis."
+      # Anmeldung mit Benutzername und Passwort, vorbelegt admin/admin (ADR-025). Die Oberfläche fordert
+      # zum Ändern auf, solange die Vorbelegung gilt.
+      indiebox.app.var.VDS10100_COMPANION_USERNAME.label: "Benutzername der Oberfläche"
+      indiebox.app.var.VDS10100_COMPANION_USERNAME.description: "Damit melden Sie sich in der Web-Oberfläche des Companion an."
+      indiebox.app.var.VDS10100_COMPANION_USERNAME.default: "admin"
+      indiebox.app.var.VDS10100_COMPANION_USERNAME.required: "false"
+      indiebox.app.var.VDS10100_COMPANION_PASSWORD.label: "Passwort der Oberfläche"
+      indiebox.app.var.VDS10100_COMPANION_PASSWORD.description: "Zusammen mit dem Benutzernamen für die Web-Oberfläche. Vorbelegt ist admin; bitte ändern, wenn die Box aus dem Internet erreichbar ist. MCP-Zugangstokens legen Sie danach in der Oberfläche an."
+      indiebox.app.var.VDS10100_COMPANION_PASSWORD.secret: "true"
+      indiebox.app.var.VDS10100_COMPANION_PASSWORD.default: "admin"
+      indiebox.app.var.VDS10100_COMPANION_PASSWORD.required: "false"
+      indiebox.pause-for-backup: "true"
+    environment:
+      DATA_DIR: /data
+      VDS_KB_HTTP_HOST: 0.0.0.0
+      VDS_KB_HTTP_PORT: "8765"
+      VDS_KB_HTTP_PATH: /mcp
+      VDS_KB_APP_USERNAME: ${VDS10100_COMPANION_USERNAME:-admin}
+      VDS_KB_APP_PASSWORD: ${VDS10100_COMPANION_PASSWORD:-admin}
+      # Embeddings über das eigene Ollama der Box statt brainbot-internem LAN (ADR-016). Das Modell
+      # muss dort einmalig installiert sein, siehe docs/indie-box-app-vertrag.md und die Oberfläche
+      # unter Einstellungen; VDS_KB_EMBED_BOX_MODEL/_DIM dort bei Bedarf zusätzlich setzen.
+      VDS_KB_EMBEDDING_PROFILE: box
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/vds10100-companion:/data
+    networks:
+      - default
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+networks:
+  default:
+  llm:
+    name: llm
