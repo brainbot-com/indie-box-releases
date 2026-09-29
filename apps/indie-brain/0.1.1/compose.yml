@@ -1,0 +1,185 @@
+# IndieBrain as an Indie Box app.
+# See brainbot-com/indie-box docs/app-integration.md: an app is a Compose
+# service carrying indiebox.app.* labels; the box derives the landing-page card,
+# a public port from the reserved 9200-9249 range, and the gateway route from
+# those labels.
+#
+# Three services, one route:
+#   indie-brain       the admin/user dashboard (the labelled UI service). It
+#                     also proxies /mcp to the MCP server, so agents connect
+#                     through the same gateway port and the dashboard's
+#                     "Connect" view shows that URL (MCP_PUBLIC_URL=auto).
+#   indie-brain-mcp   the MCP server agents talk to; no port of its own.
+#   indie-brain-db    PostgreSQL + pgvector with the schema baked into the
+#                     image (an install uploads only this file, so the
+#                     db/init scripts cannot be bind-mounted).
+#
+# Models: by default everything runs on the box's own Ollama, reached by
+# service name on the shared `llm` network, with models from the box's model
+# catalog (Admin > Models). Nothing leaves the box.
+#
+# Two values have to come from the operator, and the app DECLARES them
+# (indiebox.app.var.* below), so the dashboard prompts for them on install:
+#   INDIEBRAIN_ADMIN_PASSWORD   required
+#   INDIEBRAIN_DB_PASSWORD      required
+# The ${VAR:?} references refuse to resolve without them, so an install never
+# starts with a guessable password. Both carry a `generate` label, so their
+# fields have a Generate button on the box's form that fills in a random value
+# (indie-box docs/app-integration.md, "Generated values"); a box that does not
+# know the label ignores it.
+
+services:
+
+  # ---- the app: the ONE labelled service, so the ONE gateway route ----------
+  indie-brain:
+    image: ghcr.io/brainbot-com/indie-brain:${INDIE_BRAIN_TAG:-0.1.1}
+    # "stable" normally; "encrypted" on boxes with encrypted storage, which
+    # makes this wait for the unlock. Every service of the app that waits for
+    # the gate carries the same profile line.
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.app.name: "IndieBrain"
+      indiebox.app.icon: "brain"
+      # The port INSIDE the container. The gateway forwards its public port
+      # here; the app must never publish a host port itself.
+      indiebox.app.http-port: "3200"
+      # App version (read straight off this label by GET /v1/apps). It equals
+      # the git tag (v<version>) and the tag all three images are pinned to. A
+      # LITERAL, not an interpolation: a box has to report the version it is
+      # running. Written by indiebox/pin-images.sh together with the image
+      # defaults, so they move as one; do not edit by hand.
+      # 0.0.0 until the first release is cut.
+      indiebox.app.version: "0.1.1"
+      indiebox.app.description: "One shared, private memory for all your AI agents over MCP, on the box's own models."
+
+      # ---- the values the operator supplies (docs/app-integration.md,
+      #      "Required variables") ------------------------------------------
+      # NB `required` defaults to TRUE, so every optional one says so out loud.
+      # NB no `.default` on the optional ones on purpose: a declared default is
+      # PERSISTED to the .env at install and then outranks the `${VAR:-...}`
+      # fallback below forever, so a later release could never move it. The
+      # descriptions name the fallback instead.
+      indiebox.app.var.INDIEBRAIN_ADMIN_PASSWORD.label: "Admin password"
+      indiebox.app.var.INDIEBRAIN_ADMIN_PASSWORD.description: "Password for the IndieBrain admin, who creates users and hands out their agents' API keys. Re-applied on every start, so changing it here takes effect after the app restarts."
+      indiebox.app.var.INDIEBRAIN_ADMIN_PASSWORD.required: "true"
+      indiebox.app.var.INDIEBRAIN_ADMIN_PASSWORD.secret: "true"
+      # Letters and digits only: typed at the dashboard login. The form shows a
+      # generated one, so it can be noted before saving.
+      indiebox.app.var.INDIEBRAIN_ADMIN_PASSWORD.generate: "alnum:20"
+
+      indiebox.app.var.INDIEBRAIN_DB_PASSWORD.label: "Database password"
+      indiebox.app.var.INDIEBRAIN_DB_PASSWORD.description: "Password of the app's internal PostgreSQL. Only you and the app ever need it; pick a long random one (Generate makes one). It is fixed when the database is first created, so do not change it afterwards."
+      indiebox.app.var.INDIEBRAIN_DB_PASSWORD.required: "true"
+      indiebox.app.var.INDIEBRAIN_DB_PASSWORD.secret: "true"
+      # Nobody types it, so long; letters and digits only, so it stays safe if
+      # it ever ends up in a postgres:// URL. Pressing Generate again under
+      # Configure would lock the app out of its database, which the
+      # description above warns about.
+      indiebox.app.var.INDIEBRAIN_DB_PASSWORD.generate: "alnum:32"
+
+      indiebox.app.var.INDIEBRAIN_ADMIN_USERNAME.label: "Admin username"
+      indiebox.app.var.INDIEBRAIN_ADMIN_USERNAME.description: "Leave empty for: admin"
+      indiebox.app.var.INDIEBRAIN_ADMIN_USERNAME.required: "false"
+
+      indiebox.app.var.INDIEBRAIN_LLM_MODEL.label: "Model for auto-tagging"
+      indiebox.app.var.INDIEBRAIN_LLM_MODEL.description: "Which of the box's Ollama models extracts topics, people and action items from each thought. It has to be one the box has pulled (Admin > Models). Leave empty for: qwen3.6:35b"
+      indiebox.app.var.INDIEBRAIN_LLM_MODEL.required: "false"
+
+      indiebox.app.var.INDIEBRAIN_EMBEDDING_MODEL.label: "Embedding model"
+      indiebox.app.var.INDIEBRAIN_EMBEDDING_MODEL.description: "Which of the box's Ollama models powers semantic search. It has to be pulled on the box and produce at least 1024 dimensions. Choose before storing memories: switching later makes existing memories unsearchable. Leave empty for: qwen3-embedding:8b"
+      indiebox.app.var.INDIEBRAIN_EMBEDDING_MODEL.required: "false"
+
+      indiebox.app.var.INDIEBRAIN_OLLAMA_URL.label: "Ollama URL"
+      indiebox.app.var.INDIEBRAIN_OLLAMA_URL.description: "Only to use models from somewhere other than this box. Leave empty for the box's own Ollama: http://ollama:11434"
+      indiebox.app.var.INDIEBRAIN_OLLAMA_URL.required: "false"
+    environment: &indie-brain-env
+      # The password travels separately (libpq's PGPASSWORD, which `pg` reads
+      # when the URL carries none), so it never has to be URL-escaped.
+      DATABASE_URL: postgresql://indiebrain@indie-brain-db:5432/indiebrain
+      PGPASSWORD: ${INDIEBRAIN_DB_PASSWORD:?set INDIEBRAIN_DB_PASSWORD in the box .env}
+      ADMIN_USERNAME: ${INDIEBRAIN_ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${INDIEBRAIN_ADMIN_PASSWORD:?set INDIEBRAIN_ADMIN_PASSWORD in the box .env}
+
+      # ---- models: the box's own Ollama, by service name on `llm` ----------
+      OLLAMA_URL: ${INDIEBRAIN_OLLAMA_URL:-http://ollama:11434}
+      EMBEDDING_MODEL: ${INDIEBRAIN_EMBEDDING_MODEL:-qwen3-embedding:8b}
+      LLM_MODEL: ${INDIEBRAIN_LLM_MODEL:-qwen3.6:35b}
+      # Fixed: the vector column is created 1024 wide by the schema baked into
+      # indie-brain-db, and the embedding request asks the model for exactly
+      # that many dimensions.
+      EMBEDDING_DIM: "1024"
+      SEARCH_THRESHOLD: ${INDIEBRAIN_SEARCH_THRESHOLD:-0.4}
+
+      # ---- how the dashboard reaches and advertises the MCP server ---------
+      MCP_INTERNAL_URL: http://indie-brain-mcp:3100
+      # Agents connect to <this app's public address>/mcp, derived from the
+      # request the gateway forwards, so the assigned port and the box's
+      # hostname or TLS mode never have to be configured.
+      MCP_PUBLIC_URL: auto
+    networks:
+      - default
+      - llm
+    depends_on:
+      indie-brain-mcp:
+        condition: service_started
+      indie-brain-db:
+        condition: service_healthy
+      # Refuses to start unless the encrypted volume is actually mounted.
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- the MCP server ----------------------------------------------------------
+  # Not labelled: no card and no route of its own. Agents reach it through the
+  # dashboard's /mcp proxy.
+  indie-brain-mcp:
+    image: ghcr.io/brainbot-com/indie-brain-mcp:${INDIE_BRAIN_TAG:-0.1.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment: *indie-brain-env
+    networks:
+      - default
+      - llm
+    depends_on:
+      indie-brain-db:
+        condition: service_healthy
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- the database ------------------------------------------------------------
+  indie-brain-db:
+    image: ghcr.io/brainbot-com/indie-brain-db:${INDIE_BRAIN_TAG:-0.1.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      # Backups pause it, so the data files they copy are consistent.
+      indiebox.pause-for-backup: "true"
+    environment:
+      POSTGRES_DB: indiebrain
+      POSTGRES_USER: indiebrain
+      POSTGRES_PASSWORD: ${INDIEBRAIN_DB_PASSWORD:?set INDIEBRAIN_DB_PASSWORD in the box .env}
+    volumes:
+      # Absolute path under the data dir (only this file is uploaded, so a
+      # relative source would resolve to a directory that does not exist).
+      # Memories are user content, so it follows the encrypted volume.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indiebrain -d indiebrain"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - default
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+networks:
+  default:
+  # Platform-provided shared network (app-integration.md "Platform contract"):
+  # where the box's Ollama answers as `ollama`.
+  llm:
+    name: llm

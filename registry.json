@@ -565,12 +565,14 @@
       "variables": [
         {
           "description": "Password for the IndieBrain admin, who creates users and hands out their agents' API keys. Re-applied on every start, so changing it here takes effect after the app restarts.",
+          "generate": "alnum:20",
           "label": "Admin password",
           "name": "INDIEBRAIN_ADMIN_PASSWORD",
           "secret": true
         },
         {
-          "description": "Password of the app's internal PostgreSQL. Only you and the app ever need it; pick a long random one. It is fixed when the database is first created, so do not change it afterwards.",
+          "description": "Password of the app's internal PostgreSQL. Only you and the app ever need it; pick a long random one (Generate makes one). It is fixed when the database is first created, so do not change it afterwards.",
+          "generate": "alnum:32",
           "label": "Database password",
           "name": "INDIEBRAIN_DB_PASSWORD",
           "secret": true
@@ -606,6 +608,12 @@
           "compose_sha256": "da12db71c96f57deb5a8d31a0fa5a1cbcde547ae5410d0237f91d21e15d63cda",
           "released_at": "2026-09-29T15:34:00Z",
           "version": "0.1.0"
+        },
+        {
+          "compose_path": "apps/indie-brain/0.1.1/compose.yml",
+          "compose_sha256": "8128ae31ada85517f892f1670f34750445575aad9284a9d8a23d62b1e595d85f",
+          "released_at": "2026-09-29T16:48:28Z",
+          "version": "0.1.1"
         }
       ]
     },
