@@ -264,6 +264,12 @@
           "compose_sha256": "b1f6aff3ca47ecc04ec9ac735fb13ff2caa7ff759a1bb8a0e88cf7b5e55335eb",
           "released_at": "2026-09-29T12:23:44Z",
           "version": "0.1.0"
+        },
+        {
+          "compose_path": "apps/bechtle-mail/0.1.1/compose.yml",
+          "compose_sha256": "940019e69a423765c34a56127b3d5326719a258d1514d5897798d7ee85c3ff60",
+          "released_at": "2026-09-29T13:01:58Z",
+          "version": "0.1.1"
         }
       ]
     },
