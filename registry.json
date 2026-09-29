@@ -51,6 +51,54 @@
           "version": "1.0.2"
         },
         {
+          "compose_path": "apps/agent-command/1.2.0/compose.yml",
+          "compose_sha256": "75cb28a10c2c04050ea75a1185aec26fa39bc8e1fa871df0f35b7107d59dc459",
+          "released_at": "2026-08-14T09:20:00Z",
+          "version": "1.2.0"
+        },
+        {
+          "compose_path": "apps/agent-command/1.3.0/compose.yml",
+          "compose_sha256": "6aa1659c6a0eb72525d6106d6d4931edff16e04f06cffc13350829b476494dc2",
+          "released_at": "2026-08-14T09:40:00Z",
+          "version": "1.3.0"
+        },
+        {
+          "compose_path": "apps/agent-command/1.4.0/compose.yml",
+          "compose_sha256": "477e68eadfc18871ef169acfdd07a0d8cce50e4b1cc5ba24205f616fe868f490",
+          "released_at": "2026-08-14T15:50:00Z",
+          "version": "1.4.0"
+        },
+        {
+          "compose_path": "apps/agent-command/1.5.0/compose.yml",
+          "compose_sha256": "cec8919b302192d27da83401f45c71f25ad51d968c84ae55bac7dc5856e7349f",
+          "released_at": "2026-08-17T15:05:00Z",
+          "version": "1.5.0"
+        },
+        {
+          "compose_path": "apps/agent-command/1.6.0/compose.yml",
+          "compose_sha256": "e9811bb4a6ca6305358c9703d917d47472a14b70393874da51e078cc74fa4d13",
+          "released_at": "2026-08-17T18:20:00Z",
+          "version": "1.6.0"
+        },
+        {
+          "compose_path": "apps/agent-command/1.7.0/compose.yml",
+          "compose_sha256": "3e7f9d158a9afb1f3050ceea520a8543d1c5873e9f2ab417d7489f241f313afc",
+          "released_at": "2026-08-25T12:30:00Z",
+          "version": "1.7.0"
+        },
+        {
+          "compose_path": "apps/agent-command/1.8.0/compose.yml",
+          "compose_sha256": "30e27a8afccd8a6bb77adb0e3784ffd4146fd875a2bd5adbd356a37a6db501fc",
+          "released_at": "2026-08-25T13:05:00Z",
+          "version": "1.8.0"
+        },
+        {
+          "compose_path": "apps/agent-command/1.9.0/compose.yml",
+          "compose_sha256": "5418f5a81f7934c94d67bb283a5641a207000b8dc4d070cd260e8d6bd00a9d83",
+          "released_at": "2026-08-25T15:45:00Z",
+          "version": "1.9.0"
+        },
+        {
           "compose_path": "apps/agent-command/1.10.0/compose.yml",
           "compose_sha256": "4892d2d6464a1275cd6c643432863b5c589fc164c589732811713d7c7c970c1b",
           "released_at": "2026-09-02T14:40:00Z",
@@ -109,54 +157,6 @@
           "compose_sha256": "363e58467b6eef5968146f2cd80825027e89b99d2728ca6f512a9d8c13a48765",
           "released_at": "2026-09-08T19:55:00Z",
           "version": "1.19.0"
-        },
-        {
-          "compose_path": "apps/agent-command/1.2.0/compose.yml",
-          "compose_sha256": "75cb28a10c2c04050ea75a1185aec26fa39bc8e1fa871df0f35b7107d59dc459",
-          "released_at": "2026-08-14T09:20:00Z",
-          "version": "1.2.0"
-        },
-        {
-          "compose_path": "apps/agent-command/1.3.0/compose.yml",
-          "compose_sha256": "6aa1659c6a0eb72525d6106d6d4931edff16e04f06cffc13350829b476494dc2",
-          "released_at": "2026-08-14T09:40:00Z",
-          "version": "1.3.0"
-        },
-        {
-          "compose_path": "apps/agent-command/1.4.0/compose.yml",
-          "compose_sha256": "477e68eadfc18871ef169acfdd07a0d8cce50e4b1cc5ba24205f616fe868f490",
-          "released_at": "2026-08-14T15:50:00Z",
-          "version": "1.4.0"
-        },
-        {
-          "compose_path": "apps/agent-command/1.5.0/compose.yml",
-          "compose_sha256": "cec8919b302192d27da83401f45c71f25ad51d968c84ae55bac7dc5856e7349f",
-          "released_at": "2026-08-17T15:05:00Z",
-          "version": "1.5.0"
-        },
-        {
-          "compose_path": "apps/agent-command/1.6.0/compose.yml",
-          "compose_sha256": "e9811bb4a6ca6305358c9703d917d47472a14b70393874da51e078cc74fa4d13",
-          "released_at": "2026-08-17T18:20:00Z",
-          "version": "1.6.0"
-        },
-        {
-          "compose_path": "apps/agent-command/1.7.0/compose.yml",
-          "compose_sha256": "3e7f9d158a9afb1f3050ceea520a8543d1c5873e9f2ab417d7489f241f313afc",
-          "released_at": "2026-08-25T12:30:00Z",
-          "version": "1.7.0"
-        },
-        {
-          "compose_path": "apps/agent-command/1.8.0/compose.yml",
-          "compose_sha256": "30e27a8afccd8a6bb77adb0e3784ffd4146fd875a2bd5adbd356a37a6db501fc",
-          "released_at": "2026-08-25T13:05:00Z",
-          "version": "1.8.0"
-        },
-        {
-          "compose_path": "apps/agent-command/1.9.0/compose.yml",
-          "compose_sha256": "5418f5a81f7934c94d67bb283a5641a207000b8dc4d070cd260e8d6bd00a9d83",
-          "released_at": "2026-08-25T15:45:00Z",
-          "version": "1.9.0"
         }
       ]
     },
