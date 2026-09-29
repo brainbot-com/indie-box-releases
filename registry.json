@@ -162,6 +162,72 @@
     },
     {
       "audience": [
+        "e8e0fa65914983d82062c7729362e641b0757765185c84ee92776124e2048616"
+      ],
+      "description": "Demo Schulsekretariat: Chat, Agenten und die Schulpost als Werkzeuge in einer App.",
+      "icon": "message",
+      "id": "bechtle-chat",
+      "name": "bechtle:chat",
+      "scope": "private",
+      "variables": [
+        {
+          "description": "64 Hex-Zeichen, verschl\u00fcsseln Titel, Nachrichten und Routinen im Ruhezustand. Erzeugen mit: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+          "label": "Verschl\u00fcsselungsschl\u00fcssel",
+          "name": "BECHTLE_CHAT_ENCRYPTION_KEY",
+          "secret": true
+        },
+        {
+          "description": "Das erste Eigent\u00fcmer-Konto; ihm geh\u00f6ren die vorbereiteten Routinen. Ohne diesen Wert legt das Image seine Entwicklungskonten mit ver\u00f6ffentlichten Passw\u00f6rtern an.",
+          "label": "E-Mail des ersten Kontos",
+          "name": "BECHTLE_CHAT_ADMIN_EMAIL"
+        },
+        {
+          "description": "Passwort f\u00fcr das erste Eigent\u00fcmer-Konto. Nach der ersten Anmeldung in der App \u00e4nderbar.",
+          "label": "Passwort des ersten Kontos",
+          "name": "BECHTLE_CHAT_ADMIN_PASSWORD",
+          "secret": true
+        },
+        {
+          "default": "Schule2026!",
+          "description": "Ein Passwort f\u00fcr die drei Demo-Postf\u00e4cher (sekretariat, schulleitung, m.schneider). Muss mit dem Wert der App bechtle-mail \u00fcbereinstimmen; die Vorgabe ist die der Demo.",
+          "label": "Passwort der Schulpost-Konten",
+          "name": "BECHTLE_MAIL_PASSWORD",
+          "required": false,
+          "secret": true
+        },
+        {
+          "description": "Bearer-Token, das der Schulpost-MCP auf jeder Anfrage verlangt. Leer lassen schaltet die Pr\u00fcfung ab; auf einer Box mit mehreren Nutzern setzen.",
+          "label": "MCP-Token der Schulpost",
+          "name": "BECHTLE_MAIL_MCP_TOKEN",
+          "required": false,
+          "secret": true
+        },
+        {
+          "description": "Zugang zum StudioLLM-Gateway (Qwen 3.6 35B, GLM 5.2), die zweite Wahl in Chat und Agent-Engine. Leer lassen, wenn nur die Modelle der Box gebraucht werden. Die Box braucht daf\u00fcr ausgehenden Zugang zu studiollm.brainbot.com.",
+          "label": "StudioLLM-Schl\u00fcssel",
+          "name": "BECHTLE_STUDIOLLM_KEY",
+          "required": false,
+          "secret": true
+        },
+        {
+          "description": "Schl\u00fcssel f\u00fcr serper.dev. Leer lassen, wenn die Websuche im Chat aus bleiben soll.",
+          "label": "Serper-Schl\u00fcssel (Websuche)",
+          "name": "BECHTLE_SERPER_KEY",
+          "required": false,
+          "secret": true
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/bechtle-chat/0.1.0/compose.yml",
+          "compose_sha256": "c5fae53b66dbde7696e9517b7039f29a27d172bed20b74c54bedf5712e195201",
+          "released_at": "2026-09-29T12:23:11Z",
+          "version": "0.1.0"
+        }
+      ]
+    },
+    {
+      "audience": [
         "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
         "34f1fa330f8540b709876eee744485c820d53b331466f58e0fc9ec929624edfa"
       ],
