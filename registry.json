@@ -532,6 +532,60 @@
     },
     {
       "audience": [],
+      "description": "One shared, private memory for all your AI agents over MCP, on the box's own models.",
+      "icon": "brain",
+      "id": "indie-brain",
+      "name": "IndieBrain",
+      "scope": "public",
+      "variables": [
+        {
+          "description": "Password for the IndieBrain admin, who creates users and hands out their agents' API keys. Re-applied on every start, so changing it here takes effect after the app restarts.",
+          "label": "Admin password",
+          "name": "INDIEBRAIN_ADMIN_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Password of the app's internal PostgreSQL. Only you and the app ever need it; pick a long random one. It is fixed when the database is first created, so do not change it afterwards.",
+          "label": "Database password",
+          "name": "INDIEBRAIN_DB_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Leave empty for: admin",
+          "label": "Admin username",
+          "name": "INDIEBRAIN_ADMIN_USERNAME",
+          "required": false
+        },
+        {
+          "description": "Which of the box's Ollama models extracts topics, people and action items from each thought. It has to be one the box has pulled (Admin > Models). Leave empty for: qwen3.6:35b",
+          "label": "Model for auto-tagging",
+          "name": "INDIEBRAIN_LLM_MODEL",
+          "required": false
+        },
+        {
+          "description": "Which of the box's Ollama models powers semantic search. It has to be pulled on the box and produce at least 1024 dimensions. Choose before storing memories: switching later makes existing memories unsearchable. Leave empty for: qwen3-embedding:8b",
+          "label": "Embedding model",
+          "name": "INDIEBRAIN_EMBEDDING_MODEL",
+          "required": false
+        },
+        {
+          "description": "Only to use models from somewhere other than this box. Leave empty for the box's own Ollama: http://ollama:11434",
+          "label": "Ollama URL",
+          "name": "INDIEBRAIN_OLLAMA_URL",
+          "required": false
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/indie-brain/0.1.0/compose.yml",
+          "compose_sha256": "da12db71c96f57deb5a8d31a0fa5a1cbcde547ae5410d0237f91d21e15d63cda",
+          "released_at": "2026-09-29T15:34:00Z",
+          "version": "0.1.0"
+        }
+      ]
+    },
+    {
+      "audience": [],
       "description": "Private chat, coding agents and a shared wiki over the box's own models.",
       "icon": "message-chatbot",
       "id": "indie-chat",
