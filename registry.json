@@ -256,6 +256,12 @@
           "compose_sha256": "fe0745c901baabdee16f94e7cc9920c4bf4b05c2790dca69d678f478bc195a8e",
           "released_at": "2026-09-29T16:19:54Z",
           "version": "0.1.6"
+        },
+        {
+          "compose_path": "apps/bechtle-chat/0.1.7/compose.yml",
+          "compose_sha256": "0d88aec697c5bcbbd7c2ddc03a490a48e445585f03d31d632af57cdb8a239ef1",
+          "released_at": "2026-09-29T17:34:35Z",
+          "version": "0.1.7"
         }
       ]
     },
@@ -322,6 +328,12 @@
           "compose_sha256": "fc77d109933b18768aa42bd1af64fcc853ebdbf179adac90b506ed265ad8b6de",
           "released_at": "2026-09-29T16:20:14Z",
           "version": "0.1.6"
+        },
+        {
+          "compose_path": "apps/bechtle-mail/0.1.7/compose.yml",
+          "compose_sha256": "7c645b5dca58762d9d1384e7ffa3f87e2617dc20dc98ddb0dc54c86c73df7a0c",
+          "released_at": "2026-09-29T17:34:49Z",
+          "version": "0.1.7"
         }
       ]
     },
