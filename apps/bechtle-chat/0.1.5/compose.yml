@@ -1,0 +1,281 @@
+# bechtle-chat als EINE Indie-Box-App (siehe brainbot-com/indie-box
+# docs/app-integration.md: eine App ist ein Compose-Dienst mit indiebox.app.*-
+# Labels; die Box leitet daraus die Kachel auf der Startseite, einen
+# öffentlichen Port aus dem reservierten Bereich 9200-9249 und die
+# Gateway-Route ab).
+#
+# Das ist die EINE Hälfte des Demos: der Chat mit dem Sidecar, der die
+# Schulpost indexiert und als MCP-Werkzeuge anbietet. Die andere Hälfte, der
+# Mailserver mit Webmail und Außenwelt, ist die App `bechtle-mail`
+# (bechtle-mail.compose.yml) und wird ZUERST installiert: der Sidecar hier
+# spricht `bechtle-mail-server` auf dem gemeinsamen `llm`-Netz an, und die
+# Box belegt beim zweiten Installieren BECHTLE_MAIL_PASSWORD aus ihrer .env
+# vor, weil beide Apps denselben Namen deklarieren.
+#
+# Installiert wird sie normalerweise aus dem Katalog (Admin > Apps), als
+# private App für die Demo-Boxen. Von Hand geht auch:
+#
+#   indiebox/install.sh bechtle-chat indiebox/bechtle-chat.compose.yml <box-host>
+#
+# Kein Caddy-Pfadrouter: die App hat nur eine öffentliche Oberfläche (den
+# Chat). Der Sidecar bleibt intern und bekommt darum kein indiebox.app.*-Label.
+#
+# Die Werte, die der Betrieb setzen muss, sind unten als
+# indiebox.app.var.*-Labels deklariert. Die Box fragt sie bei der Installation
+# ab, legt sie in ihrer gemeinsamen .env ab und lässt sie über "Configure"
+# ändern. Ein `docker compose` von Hand liest dieselben Namen aus derselben .env.
+#
+# LLM: Chat, Routinen und Agenten nehmen zuerst die Modelle der Box (das
+# Ollama auf `llm`, qwen3.8:27b als Vorgabe), dahinter StudioLLM und
+# IndieRouter, falls Schlüssel gesetzt sind. Katalog und Engines dafür sind
+# indiebox/providers.json und indiebox/agent-backends.json, im Image als
+# /config-indiebox; INDIE_CONFIG_DIR unten zeigt darauf. Der Sidecar nimmt
+# für Einbettungen qwen3-embedding:8b und für die Einordnung qwen3.8:27b,
+# beide aus dem Modellkatalog der Box.
+#
+# Die Image-Tags unten sind auf die Version dieser Datei gepinnt und werden
+# von `indiebox/pin-chat.sh` zusammen mit dem indiebox.app.version-Label
+# geschrieben; nicht von Hand ändern, sonst meldet die Box eine Version, deren
+# Images sie nicht fährt. Ein BECHTLE_*_TAG in der .env der Box übersteuert
+# den Pin für genau diese eine Komponente.
+
+services:
+
+  # ---- die App: der EINE gelabelte Dienst, also die EINE Gateway-Route -------
+  bechtle-chat:
+    image: ghcr.io/brainbot-com/bechtle-chat:${BECHTLE_CHAT_TAG:-0.1.5}
+    # "stable" im Normalfall, "encrypted" auf Boxen mit verschlüsseltem
+    # Speicher; dann wartet der Dienst auf das Entsperren.
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.app.name: "Lindenhof Gymnasium Chat"
+      # Aus der Auswahlliste in dashboard/frontend/src/services/appIcons.ts.
+      indiebox.app.icon: "message"
+      # Kurzbeschreibung für den Katalog; `registry sync` liest sie von hier.
+      indiebox.app.description: "Demo Schulsekretariat: Chat, Agenten und die Schulpost als Werkzeuge in einer App."
+      # Der Port INNERHALB des Containers. Das Gateway leitet seinen
+      # öffentlichen Port hierher; die App veröffentlicht nie selbst einen.
+      indiebox.app.http-port: "3000"
+      # WÖRTLICH, nie interpoliert: die Box liest dieses Label direkt aus der
+      # installierten Datei, um die laufende Version zu melden. Gleich dem
+      # Git-Tag (v<version>, gemeinsam mit bechtle-mail) und dem Tag jedes Images oben.
+      indiebox.app.version: "0.1.5"
+
+      # ---- vom Betrieb gesetzte Werte (indie-box "Required variables") ------
+      # Jeder <NAME> ist genau die Umgebungsvariable, die unten als ${<NAME>}
+      # steht; der Wert liegt einmal in der gemeinsamen .env der Box.
+      #
+      # Pflicht: ohne Schlüssel läge alles im Klartext auf der Platte.
+      indiebox.app.var.BECHTLE_CHAT_ENCRYPTION_KEY.label: "Verschlüsselungsschlüssel"
+      indiebox.app.var.BECHTLE_CHAT_ENCRYPTION_KEY.description: "64 Hex-Zeichen, verschlüsseln Titel, Nachrichten und Routinen im Ruhezustand. Erzeugen mit: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+      indiebox.app.var.BECHTLE_CHAT_ENCRYPTION_KEY.required: "true"
+      indiebox.app.var.BECHTLE_CHAT_ENCRYPTION_KEY.secret: "true"
+      # Pflicht: ohne diese Werte legt das Image seine ENTWICKLUNGS-Konten an,
+      # mit veröffentlichten Passwörtern. Die Routinen "Dringende Post" und
+      # "Tagesbericht" gehören diesem Konto.
+      indiebox.app.var.BECHTLE_CHAT_ADMIN_EMAIL.label: "E-Mail des ersten Kontos"
+      indiebox.app.var.BECHTLE_CHAT_ADMIN_EMAIL.description: "Das erste Eigentümer-Konto; ihm gehören die vorbereiteten Routinen. Ohne diesen Wert legt das Image seine Entwicklungskonten mit veröffentlichten Passwörtern an."
+      indiebox.app.var.BECHTLE_CHAT_ADMIN_EMAIL.required: "true"
+      indiebox.app.var.BECHTLE_CHAT_ADMIN_PASSWORD.label: "Passwort des ersten Kontos"
+      indiebox.app.var.BECHTLE_CHAT_ADMIN_PASSWORD.description: "Passwort für das erste Eigentümer-Konto. Nach der ersten Anmeldung in der App änderbar."
+      indiebox.app.var.BECHTLE_CHAT_ADMIN_PASSWORD.required: "true"
+      indiebox.app.var.BECHTLE_CHAT_ADMIN_PASSWORD.secret: "true"
+      # Optional mit veröffentlichter Vorgabe: das eine Passwort der drei
+      # Demo-Konten. Die App bechtle-mail deklariert DENSELBEN Namen, deshalb
+      # ist das Feld bei der zweiten Installation aus der .env vorbelegt. Wer
+      # es später über Configure ändert, muss es bei der anderen App ebenso
+      # ändern; der Mailserver legt die Konten bei jedem Start neu an.
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.label: "Passwort der Schulpost-Konten"
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.description: "Ein Passwort für die drei Demo-Postfächer (sekretariat, schulleitung, m.schneider). Muss mit dem Wert der App bechtle-mail übereinstimmen; die Vorgabe ist die der Demo."
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.required: "false"
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.secret: "true"
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.default: "Schule2026!"
+      # Optional: leer heißt, der Sidecar prüft nichts.
+      indiebox.app.var.BECHTLE_MAIL_MCP_TOKEN.label: "MCP-Token der Schulpost"
+      indiebox.app.var.BECHTLE_MAIL_MCP_TOKEN.description: "Bearer-Token, das der Schulpost-MCP auf jeder Anfrage verlangt. Leer lassen schaltet die Prüfung ab; auf einer Box mit mehreren Nutzern setzen."
+      indiebox.app.var.BECHTLE_MAIL_MCP_TOKEN.required: "false"
+      indiebox.app.var.BECHTLE_MAIL_MCP_TOKEN.secret: "true"
+      # Optional, anders als bei kreysch-chat: die Vorgabe in Chat und
+      # Agent-Engine ist das Ollama der Box und braucht keinen Schlüssel.
+      indiebox.app.var.BECHTLE_STUDIOLLM_KEY.label: "StudioLLM-Schlüssel"
+      indiebox.app.var.BECHTLE_STUDIOLLM_KEY.description: "Zugang zum StudioLLM-Gateway (Qwen 3.6 35B, GLM 5.2), die zweite Wahl in Chat und Agent-Engine. Leer lassen, wenn nur die Modelle der Box gebraucht werden. Die Box braucht dafür ausgehenden Zugang zu studiollm.brainbot.com."
+      indiebox.app.var.BECHTLE_STUDIOLLM_KEY.required: "false"
+      indiebox.app.var.BECHTLE_STUDIOLLM_KEY.secret: "true"
+      # Optional: Websuche im Chat.
+      indiebox.app.var.BECHTLE_SERPER_KEY.label: "Serper-Schlüssel (Websuche)"
+      indiebox.app.var.BECHTLE_SERPER_KEY.description: "Schlüssel für serper.dev. Leer lassen, wenn die Websuche im Chat aus bleiben soll."
+      indiebox.app.var.BECHTLE_SERPER_KEY.required: "false"
+      indiebox.app.var.BECHTLE_SERPER_KEY.secret: "true"
+    environment:
+      PORT: "3000"
+      PYTHON: /opt/venv/bin/python
+
+      # ---- Zustand ---------------------------------------------------------
+      # SQLite, .enckey und .vapid.json liegen auf dem Datenverzeichnis der
+      # Box, nie im Container; ein Image-Update behält damit jede Unterhaltung
+      # und jedes Push-Abonnement.
+      INDIE_DATA_DIR: /data
+      # Absichtlich Pflicht: `compose config` scheitert ohne den Wert, statt
+      # still eine Box zu starten, die im Klartext speichert.
+      ENCRYPTION_KEY: ${BECHTLE_CHAT_ENCRYPTION_KEY:?set BECHTLE_CHAT_ENCRYPTION_KEY in the box .env}
+      INDIE_ADMIN_EMAIL: ${BECHTLE_CHAT_ADMIN_EMAIL:?set BECHTLE_CHAT_ADMIN_EMAIL in the box .env}
+      INDIE_ADMIN_PASSWORD: ${BECHTLE_CHAT_ADMIN_PASSWORD:?set BECHTLE_CHAT_ADMIN_PASSWORD in the box .env}
+      INDIE_ADMIN_NAME: ${BECHTLE_CHAT_ADMIN_NAME:-Sekretariat}
+
+      # ---- Konfiguration: die Kopie mit den Modellen der Box ---------------
+      # /config-indiebox = config/ mit indiebox/providers.json und
+      # indiebox/agent-backends.json (das Ollama der Box zuerst). Keine IP:
+      # `ollama` löst auf dem gemeinsamen Netz auf. EXTRA_ALLOWED_HOSTS nennt
+      # ihn trotzdem, damit auch ein älteres Image den Aufruf nicht mit 403
+      # ablehnt. Kein /config-Bind-Mount: er verdeckte die gebackene Kopie.
+      INDIE_CONFIG_DIR: /config-indiebox
+      # Das Modul `brain` (Wiki, Librarian) ist im Demo aus. config.json sagt
+      # das schon (modules: []), env gewinnt aber, also hier noch einmal.
+      INDIE_MODULES: ""
+      EXTRA_ALLOWED_HOSTS: ollama
+      STUDIOLLM_KEY: ${BECHTLE_STUDIOLLM_KEY:-}
+      INDIEROUTER_KEY: ${BECHTLE_INDIEROUTER_KEY:-}
+      # Von config/mcp-servers.json gelesen: der Header
+      # "Authorization: Bearer ${MAIL_MCP_TOKEN}" der verwalteten Zeile
+      # "schulpost". Leer = kein Header (der Sidecar prüft dann auch nicht).
+      MAIL_MCP_TOKEN: ${BECHTLE_MAIL_MCP_TOKEN:-}
+      # Zwei Chat-Apps auf einem Box-Hostnamen (indie-chat, kreysch-chat und
+      # diese) meldeten einander ab, solange alle dasselbe Cookie `indie_auth`
+      # setzten. Eigener Name, eigenes Cookie.
+      INDIE_COOKIE_NAME: bechtle_chat_auth
+
+      # ---- Coding-Agents ---------------------------------------------------
+      # Container pro Zug. Sie hängen an `llm`, erreichen darüber diesen
+      # Server und den Sidecar per Dienstnamen; deshalb braucht der Rückruf
+      # keine IP.
+      AGENT_IMAGE: ghcr.io/brainbot-com/bechtle-agent:${BECHTLE_AGENT_TAG:-0.1.5}
+      AGENT_NETWORK: llm
+      AGENT_CALLBACK_HOST: bechtle-chat
+      # Die eingeschränkten Stufen unter Settings > Agent network access
+      # setzen die Zug-Container auf ein eigenes Agent-Netz, und pi holt das
+      # Modell über diesen Server. Dafür muss `bechtle-chat` AUF diesem Netz
+      # auflösen (die kreysch-Lektion: sonst "Model error: Connection
+      # error."). Das Netz ist unten deklariert, dieser Dienst UND der Sidecar
+      # hängen daran. Nicht upstreams Name `indie-agent-net`: ein Netz ohne
+      # Compose-Label lässt `compose up` scheitern.
+      AGENT_NET: bechtle-chat-agent-net
+      AGENT_MEMORY: ${BECHTLE_AGENT_MEMORY:-1g}
+      AGENT_CPUS: ${BECHTLE_AGENT_CPUS:-1}
+      AGENT_MAX_CONCURRENT: ${BECHTLE_AGENT_CONCURRENCY:-3}
+      # Benannt, damit eine zweite Chat-Installation auf derselben Box nicht
+      # still dasselbe Volume mitbenutzt (das Modul ist aus, der Name bleibt
+      # trotzdem gesetzt, falls jemand es einschaltet).
+      AGENT_WIKI_VOLUME: bechtle-chat-wiki
+
+      # ---- Sonstiges -------------------------------------------------------
+      # Das Gateway terminiert HTTPS, HSTS ist damit gefahrlos.
+      INDIE_HSTS: "1"
+      SERPER_KEY: ${BECHTLE_SERPER_KEY:-}
+      MCP_SERVERS: "[]"
+    volumes:
+      # Absolute Pfade unter dem Datenverzeichnis: hochgeladen wird nur die
+      # Compose-Datei, ein relativer Pfad zeigte auf ein Verzeichnis, das es
+      # dort nicht gibt.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/bechtle-chat/data:/data
+      # Agents laufen als Geschwister-Container, gestartet über diesen Socket.
+      # Das ist der privilegierte Teil: ein RCE in der App ist Host-Root. Die
+      # Agent-Container selbst sehen den Socket nie.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - default
+      - llm
+      - agent
+    depends_on:
+      # Startet nicht, solange das verschlüsselte Volume nicht eingehängt ist.
+      secure-gate:
+        condition: service_completed_successfully
+      # Der Sidecar muss antworten, bevor der Chat seine verwaltete MCP-Zeile
+      # zum ersten Mal anspricht; sein Healthcheck ist grün, sobald der
+      # HTTP-Server steht, nicht erst nach dem Index.
+      bechtle-chat-mail:
+        condition: service_healthy
+
+  # ---- Agent-Image auf die Box holen ----------------------------------------
+  # Die Coding-Agents sind kurzlebige Container pro Zug, die der Server über
+  # den Socket aus AGENT_IMAGE startet; kein Dienst. Das Image muss aber AUF
+  # der Box sein, und Compose zieht nur Images, die es an einem Dienst sieht.
+  # Kein indiebox.app.*-Label, also auch keine eigene Kachel.
+  bechtle-chat-agent-image:
+    image: ghcr.io/brainbot-com/bechtle-agent:${BECHTLE_AGENT_TAG:-0.1.5}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: "no"
+    command: ["sh", "-c", "echo bechtle-agent image present on the box"]
+
+  # ---- Schulpost-Sidecar: IMAP-Index + MCP-Werkzeuge -------------------------
+  # Intern, ohne Gateway-Route. Der Chat kennt ihn aus config/mcp-servers.json
+  # als verwaltete globale Zeile "schulpost" (http://bechtle-chat-mail:9100/mcp),
+  # niemand muss ihn eintragen. Auf `llm`, weil dort der Mailserver der App
+  # bechtle-mail und das Ollama der Box stehen; auf `agent`, weil die Zug-
+  # Container der eingeschränkten Egress-Stufen ihn sonst nicht auflösen.
+  bechtle-chat-mail:
+    image: ghcr.io/brainbot-com/bechtle-chat-mail:${BECHTLE_CHAT_MAIL_TAG:-0.1.5}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      # Der Index ist eine SQLite-Datei; die Sicherung hält den Dienst an,
+      # damit sie konsistent ist.
+      indiebox.pause-for-backup: "true"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "9100"
+      # Leer = Authentifizierung aus; derselbe Wert wie MAIL_MCP_TOKEN oben.
+      MCP_TOKEN: ${BECHTLE_MAIL_MCP_TOKEN:-}
+      # Der Mailserver der App bechtle-mail, per Dienstnamen auf `llm`.
+      # Klartext-IMAP und -SMTP ohne TLS: beide Container teilen ein privates
+      # Docker-Netz, und der Mailserver bietet kein TLS an (SSL_TYPE leer).
+      MAIL_IMAP_HOST: bechtle-mail-server
+      MAIL_IMAP_PORT: "143"
+      MAIL_SMTP_HOST: bechtle-mail-server
+      MAIL_SMTP_PORT: "25"
+      MAIL_DOMAIN: gymnasium-lindenhof.example
+      MAIL_USERS: sekretariat,schulleitung,m.schneider
+      MAIL_PASSWORD: ${BECHTLE_MAIL_PASSWORD:-Schule2026!}
+      # 15 s statt der Vorgabe 30: im Demo soll eine eingespielte Mail
+      # innerhalb einer Viertelminute in post_neu stehen.
+      MAIL_POLL_SEC: "15"
+      MAIL_DB: /data/mail.db
+      # Die Modelle der Box. Das Einbettungsmodell zieht der Sidecar selbst
+      # nach, das Chat-Modell muss die Box gezogen haben (Admin > Models).
+      OLLAMA_URL: http://ollama:11434
+      EMBED_MODEL: qwen3-embedding:8b
+      CHAT_MODEL: qwen3.8:27b
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/bechtle-chat/mail:/data
+    # Grün, sobald der HTTP-Server steht (auch ohne IMAP und Ollama): darauf
+    # wartet der Chat oben. Der Index baut sich danach im Hintergrund.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - default
+      - llm
+      - agent
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+networks:
+  default:
+  # Von der Plattform bereitgestelltes gemeinsames Netz (app-integration.md,
+  # "Platform contract"): Ollama, der Mailserver der App bechtle-mail und die
+  # Zug-Container der Agenten stehen dort.
+  llm:
+    name: llm
+  # Das Netz der Zug-Container auf den eingeschränkten Egress-Stufen (AGENT_NET
+  # oben). Chat und Sidecar hängen daran, damit die Container beide unter
+  # ihrem Dienstnamen erreichen. Eine Firewall auf dem Netz gibt es auf der
+  # Box nicht, die Stufe schaltet nur die Vermittlung um, kein Verbot.
+  agent:
+    name: bechtle-chat-agent-net

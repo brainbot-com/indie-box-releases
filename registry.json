@@ -167,7 +167,7 @@
       "description": "Demo Schulsekretariat: Chat, Agenten und die Schulpost als Werkzeuge in einer App.",
       "icon": "message",
       "id": "bechtle-chat",
-      "name": "bechtle:chat",
+      "name": "Lindenhof Gymnasium Chat",
       "scope": "private",
       "variables": [
         {
@@ -241,6 +241,12 @@
           "compose_sha256": "eb6e63afe5fe577b6829ad35639cd3a0a5a9ae8e01099b58ec758493aefec22b",
           "released_at": "2026-09-29T13:54:56Z",
           "version": "0.1.3"
+        },
+        {
+          "compose_path": "apps/bechtle-chat/0.1.5/compose.yml",
+          "compose_sha256": "d8f2bb1fa5d5e5f078eca59df3c51ea6373326ad54e3e964df86850f80e30177",
+          "released_at": "2026-09-29T14:40:23Z",
+          "version": "0.1.5"
         }
       ]
     },
@@ -294,6 +300,12 @@
           "compose_sha256": "2ffd347b9a570eee39ed981f48e43549b30c62fd23bc26b7c6312ba5dfd30c6d",
           "released_at": "2026-09-29T13:55:18Z",
           "version": "0.1.3"
+        },
+        {
+          "compose_path": "apps/bechtle-mail/0.1.5/compose.yml",
+          "compose_sha256": "f3e24bda54fbcaefa56f178c8ddae8298234d90256f75cb2bc3606b533fec0ca",
+          "released_at": "2026-09-29T14:40:49Z",
+          "version": "0.1.5"
         }
       ]
     },
