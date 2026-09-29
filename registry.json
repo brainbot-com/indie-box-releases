@@ -228,6 +228,41 @@
     },
     {
       "audience": [
+        "e8e0fa65914983d82062c7729362e641b0757765185c84ee92776124e2048616"
+      ],
+      "description": "Demo-Postf\u00e4cher des Gymnasiums Lindenhof: Webmail unter /, die Au\u00dfenwelt (alle Mails an fremde Adressen) unter /aussenwelt/. Nichts verl\u00e4sst die Box.",
+      "icon": "mail",
+      "id": "bechtle-mail",
+      "name": "Schulpost (Webmail)",
+      "scope": "private",
+      "variables": [
+        {
+          "default": "Schule2026!",
+          "description": "Ein Passwort f\u00fcr die drei Demo-Konten sekretariat@, schulleitung@ und m.schneider@gymnasium-lindenhof.example (Webmail-Anmeldung mit dem Kurznamen, z. B. sekretariat). Die App bechtle-chat fragt denselben Wert f\u00fcr ihren Schulpost-Sidecar ab.",
+          "label": "Demo-Passwort der Postf\u00e4cher",
+          "name": "BECHTLE_MAIL_PASSWORD",
+          "required": false,
+          "secret": true
+        },
+        {
+          "description": "Genau 24 Zeichen. Leer lassen f\u00fcr den Wert aus der App-Datei; nur \u00e4ndern, wenn das Webmail nicht nur zur Demo dient.",
+          "label": "Roundcube-Sitzungsschl\u00fcssel",
+          "name": "BECHTLE_MAIL_DES_KEY",
+          "required": false,
+          "secret": true
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/bechtle-mail/0.1.0/compose.yml",
+          "compose_sha256": "b1f6aff3ca47ecc04ec9ac735fb13ff2caa7ff759a1bb8a0e88cf7b5e55335eb",
+          "released_at": "2026-09-29T12:23:44Z",
+          "version": "0.1.0"
+        }
+      ]
+    },
+    {
+      "audience": [
         "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
         "34f1fa330f8540b709876eee744485c820d53b331466f58e0fc9ec929624edfa"
       ],
