@@ -229,6 +229,12 @@
           "compose_sha256": "a68413067624b06c9abc01ac7f6e73b0328fcb5ab3a9fffabcd5106ac52b354c",
           "released_at": "2026-09-29T13:01:43Z",
           "version": "0.1.1"
+        },
+        {
+          "compose_path": "apps/bechtle-chat/0.1.2/compose.yml",
+          "compose_sha256": "d14c77d739621feee30bc6648f4874b0f8b8d6dc14f58b5071ca0daef79635b5",
+          "released_at": "2026-09-29T13:10:26Z",
+          "version": "0.1.2"
         }
       ]
     },
