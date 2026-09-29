@@ -171,7 +171,8 @@
       "scope": "private",
       "variables": [
         {
-          "description": "64 Hex-Zeichen, verschl\u00fcsseln Titel, Nachrichten und Routinen im Ruhezustand. Erzeugen mit: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+          "description": "64 Hex-Zeichen, verschl\u00fcsseln Titel, Nachrichten und Routinen im Ruhezustand. \u201eErzeugen\u201c legt einen an; ohne den Knopf: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\". Danach nicht mehr \u00e4ndern, sonst ist alles Gespeicherte unlesbar.",
+          "generate": "hex:32",
           "label": "Verschl\u00fcsselungsschl\u00fcssel",
           "name": "BECHTLE_CHAT_ENCRYPTION_KEY",
           "secret": true
@@ -183,6 +184,7 @@
         },
         {
           "description": "Passwort f\u00fcr das erste Eigent\u00fcmer-Konto. Nach der ersten Anmeldung in der App \u00e4nderbar.",
+          "generate": "alnum:20",
           "label": "Passwort des ersten Kontos",
           "name": "BECHTLE_CHAT_ADMIN_PASSWORD",
           "secret": true
@@ -197,6 +199,7 @@
         },
         {
           "description": "Bearer-Token, das der Schulpost-MCP auf jeder Anfrage verlangt. Leer lassen schaltet die Pr\u00fcfung ab; auf einer Box mit mehreren Nutzern setzen.",
+          "generate": "base64url:32",
           "label": "MCP-Token der Schulpost",
           "name": "BECHTLE_MAIL_MCP_TOKEN",
           "required": false,
@@ -247,6 +250,12 @@
           "compose_sha256": "d8f2bb1fa5d5e5f078eca59df3c51ea6373326ad54e3e964df86850f80e30177",
           "released_at": "2026-09-29T14:40:23Z",
           "version": "0.1.5"
+        },
+        {
+          "compose_path": "apps/bechtle-chat/0.1.6/compose.yml",
+          "compose_sha256": "fe0745c901baabdee16f94e7cc9920c4bf4b05c2790dca69d678f478bc195a8e",
+          "released_at": "2026-09-29T16:19:54Z",
+          "version": "0.1.6"
         }
       ]
     },
@@ -269,7 +278,8 @@
           "secret": true
         },
         {
-          "description": "Genau 24 Zeichen. Leer lassen f\u00fcr den Wert aus der App-Datei; nur \u00e4ndern, wenn das Webmail nicht nur zur Demo dient.",
+          "description": "Genau 24 Zeichen. Leer lassen f\u00fcr den Wert aus der App-Datei; nur \u00e4ndern, wenn das Webmail nicht nur zur Demo dient. \u201eErzeugen\u201c tr\u00e4gt 24 zuf\u00e4llige Buchstaben und Ziffern ein.",
+          "generate": "alnum:24",
           "label": "Roundcube-Sitzungsschl\u00fcssel",
           "name": "BECHTLE_MAIL_DES_KEY",
           "required": false,
@@ -306,6 +316,12 @@
           "compose_sha256": "f3e24bda54fbcaefa56f178c8ddae8298234d90256f75cb2bc3606b533fec0ca",
           "released_at": "2026-09-29T14:40:49Z",
           "version": "0.1.5"
+        },
+        {
+          "compose_path": "apps/bechtle-mail/0.1.6/compose.yml",
+          "compose_sha256": "fc77d109933b18768aa42bd1af64fcc853ebdbf179adac90b506ed265ad8b6de",
+          "released_at": "2026-09-29T16:20:14Z",
+          "version": "0.1.6"
         }
       ]
     },
