@@ -803,7 +803,8 @@
         },
         {
           "default": "admin",
-          "description": "Zusammen mit dem Benutzernamen f\u00fcr die Web-Oberfl\u00e4che. Vorbelegt ist admin; bitte \u00e4ndern, wenn die Box aus dem Internet erreichbar ist. MCP-Zugangstokens legen Sie danach in der Oberfl\u00e4che an.",
+          "description": "Zusammen mit dem Benutzernamen f\u00fcr die Web-Oberfl\u00e4che. Vorbelegt ist admin; bitte \u00e4ndern, wenn die Box aus dem Internet erreichbar ist. \u201eErzeugen\u201c tr\u00e4gt ein zuf\u00e4lliges Passwort ein. MCP-Zugangstokens legen Sie danach in der Oberfl\u00e4che an.",
+          "generate": "alnum:20",
           "label": "Passwort der Oberfl\u00e4che",
           "name": "VDS10100_COMPANION_PASSWORD",
           "required": false,
@@ -834,6 +835,12 @@
           "compose_sha256": "76fc53609a3be9a5079d9a8bdbf808d1b182f885cb9632b5230f281caa40f71e",
           "released_at": "2026-09-24T20:56:37Z",
           "version": "0.2.2"
+        },
+        {
+          "compose_path": "apps/vds10100-companion/0.2.3/compose.yml",
+          "compose_sha256": "f30b085cf5d006f0a08c18c604adf70ca2352835a88d175994650ff4ad54f59e",
+          "released_at": "2026-09-29T16:15:58Z",
+          "version": "0.2.3"
         }
       ]
     }
