@@ -262,6 +262,12 @@
           "compose_sha256": "0d88aec697c5bcbbd7c2ddc03a490a48e445585f03d31d632af57cdb8a239ef1",
           "released_at": "2026-09-29T17:34:35Z",
           "version": "0.1.7"
+        },
+        {
+          "compose_path": "apps/bechtle-chat/0.1.8/compose.yml",
+          "compose_sha256": "5e75887ca1971c18b0d63734bae0d6acf95e2129386fedfd3295b1106843e04d",
+          "released_at": "2026-09-29T18:03:31Z",
+          "version": "0.1.8"
         }
       ]
     },
@@ -334,6 +340,12 @@
           "compose_sha256": "7c645b5dca58762d9d1384e7ffa3f87e2617dc20dc98ddb0dc54c86c73df7a0c",
           "released_at": "2026-09-29T17:34:49Z",
           "version": "0.1.7"
+        },
+        {
+          "compose_path": "apps/bechtle-mail/0.1.8/compose.yml",
+          "compose_sha256": "ee37d90f24a26f09a955a775f5daf450f24c1510013fd5fc4b2f2a3a4c469a3b",
+          "released_at": "2026-09-29T18:03:44Z",
+          "version": "0.1.8"
         }
       ]
     },
@@ -623,68 +635,6 @@
           "compose_path": "apps/hahnair-chat/0.1.1/compose.yml",
           "compose_sha256": "f7618bead669f0dd996a60f0f0d8c997286ab5867d75cb2bbed4e2e3c1e292ea",
           "released_at": "2026-09-30T12:48:40Z",
-          "version": "0.1.1"
-        }
-      ]
-    },
-    {
-      "audience": [],
-      "description": "One shared, private memory for all your AI agents over MCP, on the box's own models.",
-      "icon": "brain",
-      "id": "indie-brain",
-      "name": "IndieBrain",
-      "scope": "public",
-      "variables": [
-        {
-          "description": "Password for the IndieBrain admin, who creates users and hands out their agents' API keys. Re-applied on every start, so changing it here takes effect after the app restarts.",
-          "generate": "alnum:20",
-          "label": "Admin password",
-          "name": "INDIEBRAIN_ADMIN_PASSWORD",
-          "secret": true
-        },
-        {
-          "description": "Password of the app's internal PostgreSQL. Only you and the app ever need it; pick a long random one (Generate makes one). It is fixed when the database is first created, so do not change it afterwards.",
-          "generate": "alnum:32",
-          "label": "Database password",
-          "name": "INDIEBRAIN_DB_PASSWORD",
-          "secret": true
-        },
-        {
-          "description": "Leave empty for: admin",
-          "label": "Admin username",
-          "name": "INDIEBRAIN_ADMIN_USERNAME",
-          "required": false
-        },
-        {
-          "description": "Which of the box's Ollama models extracts topics, people and action items from each thought. It has to be one the box has pulled (Admin > Models). Leave empty for: qwen3.6:35b",
-          "label": "Model for auto-tagging",
-          "name": "INDIEBRAIN_LLM_MODEL",
-          "required": false
-        },
-        {
-          "description": "Which of the box's Ollama models powers semantic search. It has to be pulled on the box and produce at least 1024 dimensions. Choose before storing memories: switching later makes existing memories unsearchable. Leave empty for: qwen3-embedding:8b",
-          "label": "Embedding model",
-          "name": "INDIEBRAIN_EMBEDDING_MODEL",
-          "required": false
-        },
-        {
-          "description": "Only to use models from somewhere other than this box. Leave empty for the box's own Ollama: http://ollama:11434",
-          "label": "Ollama URL",
-          "name": "INDIEBRAIN_OLLAMA_URL",
-          "required": false
-        }
-      ],
-      "versions": [
-        {
-          "compose_path": "apps/indie-brain/0.1.0/compose.yml",
-          "compose_sha256": "da12db71c96f57deb5a8d31a0fa5a1cbcde547ae5410d0237f91d21e15d63cda",
-          "released_at": "2026-09-29T15:34:00Z",
-          "version": "0.1.0"
-        },
-        {
-          "compose_path": "apps/indie-brain/0.1.1/compose.yml",
-          "compose_sha256": "8128ae31ada85517f892f1670f34750445575aad9284a9d8a23d62b1e595d85f",
-          "released_at": "2026-09-29T16:48:28Z",
           "version": "0.1.1"
         }
       ]
