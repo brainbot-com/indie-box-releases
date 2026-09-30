@@ -568,6 +568,66 @@
       ]
     },
     {
+      "audience": [
+        "6e8f54e3a96f8ecf96f2b0afe506402b5acc780bbaaa234ea6c7a6684ca6ff59"
+      ],
+      "description": "Privater KI-Chat f\u00fcr Hahn Air: Unterhaltungen, Coding-Agenten und die i-doit-CMDB (nur lesend) als eine App.",
+      "icon": "message",
+      "id": "hahnair-chat",
+      "name": "hahnair:chat",
+      "scope": "private",
+      "variables": [
+        {
+          "description": "64 Hex-Zeichen, verschl\u00fcsseln Titel und Nachrichten im Ruhezustand. \u201eErzeugen\u201c legt einen an. Danach nicht mehr \u00e4ndern, sonst ist alles Gespeicherte unlesbar.",
+          "generate": "hex:32",
+          "label": "Verschl\u00fcsselungsschl\u00fcssel",
+          "name": "HAHNAIR_CHAT_ENCRYPTION_KEY",
+          "secret": true
+        },
+        {
+          "description": "Das erste Eigent\u00fcmer-Konto. Ohne diesen Wert legt das Image seine Entwicklungskonten mit ver\u00f6ffentlichten Passw\u00f6rtern an.",
+          "label": "E-Mail des ersten Kontos",
+          "name": "HAHNAIR_CHAT_ADMIN_EMAIL"
+        },
+        {
+          "description": "Passwort f\u00fcr das erste Eigent\u00fcmer-Konto. Nach der ersten Anmeldung in der App \u00e4nderbar.",
+          "generate": "alnum:20",
+          "label": "Passwort des ersten Kontos",
+          "name": "HAHNAIR_CHAT_ADMIN_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Bearer-Token zwischen Chat und CMDB-Dienst. \u201eErzeugen\u201c legt eines an; niemand muss es sich merken.",
+          "generate": "base64url:32",
+          "label": "Token des CMDB-Dienstes",
+          "name": "HAHNAIR_MCP_TOKEN",
+          "secret": true
+        },
+        {
+          "description": "Zugang zum StudioLLM-Gateway, die zweite Wahl in Chat und Agent-Engine. Leer lassen, wenn nur die Modelle der Box benutzt werden sollen. Achtung: mit StudioLLM verlassen Inhalte die Box.",
+          "label": "StudioLLM-Schl\u00fcssel (optional)",
+          "name": "HAHNAIR_STUDIOLLM_KEY",
+          "required": false,
+          "secret": true
+        },
+        {
+          "description": "Schl\u00fcssel f\u00fcr serper.dev. Leer lassen, wenn die Websuche im Chat aus bleiben soll.",
+          "label": "Serper-Schl\u00fcssel (Websuche)",
+          "name": "HAHNAIR_SERPER_KEY",
+          "required": false,
+          "secret": true
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/hahnair-chat/0.1.1/compose.yml",
+          "compose_sha256": "f7618bead669f0dd996a60f0f0d8c997286ab5867d75cb2bbed4e2e3c1e292ea",
+          "released_at": "2026-09-30T12:48:40Z",
+          "version": "0.1.1"
+        }
+      ]
+    },
+    {
       "audience": [],
       "description": "One shared, private memory for all your AI agents over MCP, on the box's own models.",
       "icon": "brain",
