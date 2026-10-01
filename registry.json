@@ -653,6 +653,100 @@
     },
     {
       "audience": [],
+      "description": "Company knowledge base: Onyx indexes Google Drive, GitHub, Gmail and websites; hybrid search with reranking, an MCP server for agents and group access scopes, all on the box's own models.",
+      "icon": "brain",
+      "id": "indie-brain",
+      "name": "Knowledge Base",
+      "scope": "public",
+      "variables": [
+        {
+          "description": "Password of the access panel (the 'Knowledge Base: access' card), where scoped tokens and search accounts are made. Re-applied on every start, so changing it here takes effect after the app restarts. The Onyx admin is a separate account: the first person to sign up in Onyx becomes its admin.",
+          "generate": "alnum:20",
+          "label": "Access admin password",
+          "name": "INDIE_BRAIN_ADMIN_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Token of the general scope (everything except private-* document sets). The search page hands it to its visitors as a cookie, the MCP server uses it, and agents on the box can send it to the search API as X-Onyx-Token. Changing it signs every browser and agent holding the old one out.",
+          "generate": "alnum:43",
+          "label": "General search token",
+          "name": "INDIE_BRAIN_SEARCH_TOKEN",
+          "secret": true
+        },
+        {
+          "description": "Password of Onyx's internal PostgreSQL, which also holds the connector credentials. Only the app ever needs it; Generate makes a long random one. It is fixed when the database is first created, so do not change it afterwards.",
+          "generate": "alnum:32",
+          "label": "Database password",
+          "name": "INDIE_BRAIN_DB_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Admin password of the app's internal OpenSearch index (the app adds the symbol and mixed case OpenSearch insists on). Only the app ever needs it; Generate makes a long random one. It is fixed when the index is first created, so do not change it afterwards.",
+          "generate": "alnum:32",
+          "label": "Index password",
+          "name": "INDIE_BRAIN_OPENSEARCH_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Which Ollama model embeds documents and search queries. Set it BEFORE the first start: Onyx builds its index for this model, and changing it later means a full re-index started from the Onyx admin UI (Search Settings). Pulled into the box's Ollama automatically. Leave empty for: qwen3-embedding:8b",
+          "label": "Embedding model",
+          "name": "INDIE_BRAIN_EMBEDDING_MODEL",
+          "required": false
+        },
+        {
+          "description": "Which Ollama model reranks the top search hits (a Qwen3-Reranker, called for yes/no logprobs). Pulled into the box's Ollama automatically; 'off' skips reranking and does not pull anything. Leave empty for: dengcao/Qwen3-Reranker-4B:q8_0",
+          "label": "Reranking model",
+          "name": "INDIE_BRAIN_RERANK_MODEL",
+          "required": false
+        },
+        {
+          "description": "Default model of Onyx's own chat, set up once on the first start; afterwards manage it in the Onyx admin UI (LLM). It has to be pulled on the box (Admin > Models). Search and the MCP server do not use it. Leave empty for: qwen3.6:35b",
+          "label": "Chat model (Onyx)",
+          "name": "INDIE_BRAIN_CHAT_MODEL",
+          "required": false
+        },
+        {
+          "description": "Only to use models from somewhere other than this box. Leave empty for the box's own Ollama: http://ollama:11434",
+          "label": "Ollama URL",
+          "name": "INDIE_BRAIN_OLLAMA_URL",
+          "required": false
+        },
+        {
+          "description": "How long Ollama keeps the embedder and reranker in GPU memory after a search: -1 pins them (fast searches; about 24 GB stay allocated), a duration such as 30m frees the memory when search is idle, at the price of a slow first search. Leave empty for: -1",
+          "label": "Keep search models loaded",
+          "name": "INDIE_BRAIN_OLLAMA_KEEP_ALIVE",
+          "required": false
+        },
+        {
+          "description": "The Google account indexed by the Gmail connector. Search results link to its threads with ?authuser=<this>, so they open in the right mailbox. Leave empty to link to the browser's first signed-in account.",
+          "label": "Gmail account for links",
+          "name": "INDIE_BRAIN_GMAIL_ACCOUNT",
+          "required": false
+        },
+        {
+          "description": "Only Gmail threads matching this Gmail search are indexed, so the index holds a curated subset rather than the whole mailbox: label the threads (by hand or with a Gmail filter rule). '-in:spam -in:trash' indexes everything. Leave empty for: label:kb",
+          "label": "Gmail filter",
+          "name": "INDIE_BRAIN_GMAIL_QUERY",
+          "required": false
+        },
+        {
+          "description": "The <Instruct> the reranker judges relevance by, e.g. which sources or kinds of document to prefer. Leave empty for a generic company knowledge base instruction.",
+          "label": "Reranking instruction",
+          "name": "INDIE_BRAIN_RERANK_INSTRUCT",
+          "required": false
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/indie-brain/0.1.0/compose.yml",
+          "compose_sha256": "32ca4776d089676f9ad51853d9f293c8b17c8322bf83af114101d0c93b904135",
+          "released_at": "2026-10-01T08:34:08Z",
+          "version": "0.1.0"
+        }
+      ]
+    },
+    {
+      "audience": [],
       "description": "Private chat, coding agents and a shared wiki over the box's own models.",
       "icon": "message-chatbot",
       "id": "indie-chat",
