@@ -49,7 +49,7 @@ services:
       indiebox.app.http-port: "3000"
       indiebox.app.port: "9202"
       indiebox.app.version: "1.3.0"
-      indiebox.app.description: "Private chat and coding agents over the on-box models, the shared wiki and the Onyx knowledge index."
+      indiebox.app.description: "Privater KI-Chat und Coding-Agenten mit den Modellen der Box, dem gemeinsamen Wiki und dem Onyx-Wissensindex."
 
       # Prompted for at install/update and stored in the box's managed .env.
       indiebox.app.var.INDIECHAT_ENCRYPTION_KEY.label: "Chat encryption key"

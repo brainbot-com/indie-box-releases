@@ -51,7 +51,7 @@ services:
     labels:
       indiebox.app.name: "Knowledge Base"
       indiebox.app.icon: "brain"
-      indiebox.app.description: "Company knowledge base: Onyx indexes Google Drive, GitHub, Gmail and websites; hybrid search with reranking, an MCP server for agents and group access scopes, all on the box's own models."
+      indiebox.app.description: "Firmen-Wissensbasis: Onyx indexiert Google Drive, GitHub, Gmail und Websites; hybride Suche mit Reranking, ein MCP-Server für Agenten und Zugriffsbereiche je Gruppe, alles mit den eigenen Modellen der Box."
       # The port INSIDE the container. The gateway forwards the public port
       # here; the app never publishes a host port itself.
       indiebox.app.http-port: "8080"

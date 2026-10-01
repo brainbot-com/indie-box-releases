@@ -51,7 +51,7 @@ services:
       indiebox.app.version: "0.1.1"
       # Short catalog description (indie-box's registry sync reads it off this
       # label rather than repeating it in the manifest).
-      indiebox.app.description: "Private chat, coding agents and a shared wiki over the box's own models."
+      indiebox.app.description: "Privater KI-Chat, Coding-Agenten und ein gemeinsames Wiki mit den eigenen Modellen der Box."
 
       # ---- the values the operator supplies (docs/app-integration.md,
       #      "Required variables") ------------------------------------------

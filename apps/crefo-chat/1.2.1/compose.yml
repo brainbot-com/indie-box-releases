@@ -64,7 +64,7 @@ services:
       # or the box will report a version whose images it is not running.
       indiebox.app.version: "1.2.1"
       # Short catalog description (registry sync reads it off this label).
-      indiebox.app.description: "Crefo chat, Insights dashboard and read-only revenue MCP as one app."
+      indiebox.app.description: "Crefo-Chat, Insights-Dashboard und der Umsatz-MCP (nur lesend) als eine App."
       # ---- operator-set variables (indie-box "Required variables") -------------
       # Declared so the dashboard prompts for these on install/update and lets the
       # operator edit them later, instead of hand-editing the box's shared .env
