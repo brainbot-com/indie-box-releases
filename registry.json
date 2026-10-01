@@ -662,11 +662,11 @@
       "description": "Firmen-Wissensbasis: Onyx indexiert Google Drive, GitHub, Gmail und Websites; hybride Suche mit Reranking, ein MCP-Server f\u00fcr Agenten und Zugriffsbereiche je Gruppe, alles mit den eigenen Modellen der Box.",
       "icon": "brain",
       "id": "indie-brain",
-      "name": "Knowledge Base",
+      "name": "Indie Brain",
       "scope": "public",
       "variables": [
         {
-          "description": "Password of the access panel (the 'Knowledge Base: access' card), where scoped tokens and search accounts are made. Re-applied on every start, so changing it here takes effect after the app restarts. The Onyx admin is a separate account: the first person to sign up in Onyx becomes its admin.",
+          "description": "Password of the access panel (the 'Indie Brain: access' card), where scoped tokens and search accounts are made. Re-applied on every start, so changing it here takes effect after the app restarts. The Onyx admin is a separate account: the first person to sign up in Onyx becomes its admin.",
           "generate": "alnum:20",
           "label": "Access admin password",
           "name": "INDIE_BRAIN_ADMIN_PASSWORD",
@@ -694,6 +694,13 @@
           "secret": true
         },
         {
+          "description": "Signs Onyx's password-reset and email-verification links and its other short-lived tokens (Onyx's USER_AUTH_SECRET; Onyx refuses to start without one). Only the app ever needs it; Generate makes one. Changing it later only voids links that are still pending: nobody is signed out.",
+          "generate": "hex:32",
+          "label": "Onyx signing secret",
+          "name": "INDIE_BRAIN_AUTH_SECRET",
+          "secret": true
+        },
+        {
           "description": "Which Ollama model embeds documents and search queries. Set it BEFORE the first start: Onyx builds its index for this model, and changing it later means a full re-index started from the Onyx admin UI (Search Settings). Pulled into the box's Ollama automatically. Leave empty for: qwen3-embedding:8b",
           "label": "Embedding model",
           "name": "INDIE_BRAIN_EMBEDDING_MODEL",
@@ -706,7 +713,7 @@
           "required": false
         },
         {
-          "description": "Default model of Onyx's own chat, set up once on the first start; afterwards manage it in the Onyx admin UI (LLM). It has to be pulled on the box (Admin > Models). Search and the MCP server do not use it. Leave empty for: qwen3.6:35b",
+          "description": "Default model of Onyx's own chat, set up once on the first start; afterwards manage it in the Onyx admin UI (LLM). It has to be pulled on the box (Admin > Models). Search and the MCP server do not use it. Leave empty for: qwen3.8:27b",
           "label": "Chat model (Onyx)",
           "name": "INDIE_BRAIN_CHAT_MODEL",
           "required": false
@@ -716,30 +723,6 @@
           "label": "Ollama URL",
           "name": "INDIE_BRAIN_OLLAMA_URL",
           "required": false
-        },
-        {
-          "description": "How long Ollama keeps the embedder and reranker in GPU memory after a search: -1 pins them (fast searches; about 24 GB stay allocated), a duration such as 30m frees the memory when search is idle, at the price of a slow first search. Leave empty for: -1",
-          "label": "Keep search models loaded",
-          "name": "INDIE_BRAIN_OLLAMA_KEEP_ALIVE",
-          "required": false
-        },
-        {
-          "description": "The Google account indexed by the Gmail connector. Search results link to its threads with ?authuser=<this>, so they open in the right mailbox. Leave empty to link to the browser's first signed-in account.",
-          "label": "Gmail account for links",
-          "name": "INDIE_BRAIN_GMAIL_ACCOUNT",
-          "required": false
-        },
-        {
-          "description": "Only Gmail threads matching this Gmail search are indexed, so the index holds a curated subset rather than the whole mailbox: label the threads (by hand or with a Gmail filter rule). '-in:spam -in:trash' indexes everything. Leave empty for: label:kb",
-          "label": "Gmail filter",
-          "name": "INDIE_BRAIN_GMAIL_QUERY",
-          "required": false
-        },
-        {
-          "description": "The <Instruct> the reranker judges relevance by, e.g. which sources or kinds of document to prefer. Leave empty for a generic company knowledge base instruction.",
-          "label": "Reranking instruction",
-          "name": "INDIE_BRAIN_RERANK_INSTRUCT",
-          "required": false
         }
       ],
       "versions": [
@@ -748,6 +731,12 @@
           "compose_sha256": "d82b66a6b6d1d4aa9c31bfbfaa793914477702aae376b1a16fa738bbaaef5901",
           "released_at": "2026-10-01T08:34:08Z",
           "version": "0.1.0"
+        },
+        {
+          "compose_path": "apps/indie-brain/0.2.0/compose.yml",
+          "compose_sha256": "56bb9f106eaa97f332d0f0c95893c9e12ed5959cf5331d1ed707b3d33d8ff0fe",
+          "released_at": "2026-10-01T09:33:00Z",
+          "version": "0.2.0"
         }
       ]
     },
