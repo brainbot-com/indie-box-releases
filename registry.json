@@ -983,6 +983,41 @@
     {
       "audience": [
         "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
+        "34f1fa330f8540b709876eee744485c820d53b331466f58e0fc9ec929624edfa"
+      ],
+      "description": "Aus einem Lead wird ein belegtes Profil mit Score, Herkunft und Belegen.",
+      "icon": "target-arrow",
+      "id": "lead-profile",
+      "name": "Lead Profiler",
+      "scope": "private",
+      "variables": [
+        {
+          "description": "Passwort der mitgelieferten Datenbank. Am einfachsten \u201eErzeugen\u201c dr\u00fccken, merken muss man es sich nicht. Nach der Installation nicht mehr \u00e4ndern: die Datenbank beh\u00e4lt das Passwort vom ersten Start, die App kommt danach nicht mehr an ihre Daten.",
+          "generate": "alnum:32",
+          "label": "Datenbank-Passwort",
+          "name": "LEAD_PROFILE_DB_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Damit melden Sie sich nach der Installation als \u201eadmin\u201c an und legen in der Konfiguration die Zug\u00e4nge f\u00fcr alle anderen an. Vor dem Speichern notieren. Gilt nur f\u00fcr die erste Anmeldung: Passw\u00f6rter \u00e4ndern Sie danach in der App, nicht hier.",
+          "generate": "alnum:20",
+          "label": "Passwort f\u00fcr den ersten Zugang",
+          "name": "LEAD_PROFILE_ADMIN_PASSWORD",
+          "secret": true
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/lead-profile/0.1.0/compose.yml",
+          "compose_sha256": "df94137d4cbad076ea0047e9207829d9037b82a4c4335ca7f3732759ccb252eb",
+          "released_at": "2026-10-02T09:47:17Z",
+          "version": "0.1.0"
+        }
+      ]
+    },
+    {
+      "audience": [
+        "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
         "9c9d7eb1ff3a999561cb7d4760cdd85228f9470734ed701a58ded4453ef57679"
       ],
       "description": "Belegte Antworten zu VdS 10100 und NIS-2/BSIG, mit Fundstelle aus der eigenen Wissensbasis.",
