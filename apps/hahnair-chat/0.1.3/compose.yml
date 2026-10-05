@@ -1,0 +1,213 @@
+# hahnair-chat als EINE Indie-Box-App (brainbot-com/indie-box
+# docs/app-integration.md: eine App ist ein Compose-Dienst mit indiebox.app.*-
+# Labels; die Box leitet daraus Kachel, öffentlichen Port aus 9200-9249 und
+# Gateway-Route ab).
+#
+# Installiert wird sie aus dem Katalog (Admin > Apps), als private App für den
+# Mandanten von Hahn Air. Von Hand geht auch:
+#
+#   indiebox/install.sh hahnair-chat indiebox/hahnair-chat.compose.yml <box-host>
+#
+# Der gelabelte Dienst ist ein Pfadrouter (Caddy, wie bei crefo-chat): unter
+# der EINEN Route der App liegen der Chat und, unter /cmdb/mcp, der CMDB-Dienst
+# für externe MCP-Clients. Der CMDB-Dienst selbst trägt kein indiebox.app.*-
+# Label, sonst wäre er eine eigene Kachel. Die Nebendienste heißen
+# hahnair-chat-<rolle>, damit die Box sie der App zuordnet.
+#
+# Die Werte, die der Betrieb setzen muss, sind unten als indiebox.app.var.*-
+# Labels deklariert. Die Box fragt sie bei der Installation ab und lässt sie über
+# „Configure" ändern. Die Zugangsdaten zu i-doit sind KEINE davon: die setzt
+# ein Owner oder Admin des Chats in der App „CMDB" unter Einstellungen.
+#
+# Die Image-Tags sind auf die Version dieser Datei gepinnt und werden von
+# `indiebox/pin-images.sh` zusammen mit dem indiebox.app.version-Label
+# geschrieben. Ein HAHNAIR_*_TAG in der .env der Box übersteuert den Pin für
+# genau eine Komponente.
+
+services:
+
+  # ---- öffentlicher Eingang: Pfadrouter (der EINE gelabelte Dienst = die EINE
+  # Gateway-Route), wie bei crefo-chat. /cmdb/mcp geht an den CMDB-Dienst, damit
+  # Copilot, Claude & Co. von außerhalb der Box die CMDB lesen können; alles
+  # andere an den Chat. /app des CMDB-Dienstes bleibt absichtlich intern.
+  hahnair-chat:
+    image: caddy:2-alpine
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    configs:
+      - source: hahnair-router-caddyfile
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+    labels:
+      indiebox.app.name: "hahnair:chat"
+      indiebox.app.icon: "message"
+      indiebox.app.description: "Privater KI-Chat für Hahn Air: Unterhaltungen, Coding-Agenten und die i-doit-CMDB (nur lesend) als eine App."
+      indiebox.app.http-port: "80"
+      # WÖRTLICH, nie interpoliert: die Box liest das Label direkt, um die
+      # laufende Version zu melden.
+      indiebox.app.version: "0.1.3"
+
+      # ---- vom Betrieb gesetzte Werte --------------------------------------
+      indiebox.app.var.HAHNAIR_CHAT_ENCRYPTION_KEY.label: "Verschlüsselungsschlüssel"
+      indiebox.app.var.HAHNAIR_CHAT_ENCRYPTION_KEY.description: "64 Hex-Zeichen, verschlüsseln Titel und Nachrichten im Ruhezustand. „Erzeugen“ legt einen an. Danach nicht mehr ändern, sonst ist alles Gespeicherte unlesbar."
+      indiebox.app.var.HAHNAIR_CHAT_ENCRYPTION_KEY.required: "true"
+      indiebox.app.var.HAHNAIR_CHAT_ENCRYPTION_KEY.secret: "true"
+      indiebox.app.var.HAHNAIR_CHAT_ENCRYPTION_KEY.generate: "hex:32"
+      indiebox.app.var.HAHNAIR_CHAT_ADMIN_EMAIL.label: "E-Mail des ersten Kontos"
+      indiebox.app.var.HAHNAIR_CHAT_ADMIN_EMAIL.description: "Das erste Eigentümer-Konto. Ohne diesen Wert legt das Image seine Entwicklungskonten mit veröffentlichten Passwörtern an."
+      indiebox.app.var.HAHNAIR_CHAT_ADMIN_EMAIL.required: "true"
+      indiebox.app.var.HAHNAIR_CHAT_ADMIN_PASSWORD.label: "Passwort des ersten Kontos"
+      indiebox.app.var.HAHNAIR_CHAT_ADMIN_PASSWORD.description: "Passwort für das erste Eigentümer-Konto. Nach der ersten Anmeldung in der App änderbar."
+      indiebox.app.var.HAHNAIR_CHAT_ADMIN_PASSWORD.required: "true"
+      indiebox.app.var.HAHNAIR_CHAT_ADMIN_PASSWORD.secret: "true"
+      indiebox.app.var.HAHNAIR_CHAT_ADMIN_PASSWORD.generate: "alnum:20"
+      # Pflicht: der CMDB-Sidecar hängt am gemeinsamen `llm`-Netz der Box, auf
+      # dem auch andere Apps laufen. Ohne Token läse jeder Container dort die
+      # CMDB mit.
+      indiebox.app.var.HAHNAIR_MCP_TOKEN.label: "Token des CMDB-Dienstes"
+      indiebox.app.var.HAHNAIR_MCP_TOKEN.description: "Bearer-Token zwischen Chat und CMDB-Dienst. „Erzeugen“ legt eines an; niemand muss es sich merken."
+      indiebox.app.var.HAHNAIR_MCP_TOKEN.required: "true"
+      indiebox.app.var.HAHNAIR_MCP_TOKEN.secret: "true"
+      indiebox.app.var.HAHNAIR_MCP_TOKEN.generate: "base64url:32"
+      # Optional: StudioLLM ist ein Dienst AUSSERHALB der Box. Die Vorgabe in
+      # Chat und Agent-Engine ist das Ollama der Box; wer StudioLLM wählt,
+      # schickt Inhalte (auch CMDB-Antworten) an studiollm.brainbot.com.
+      indiebox.app.var.HAHNAIR_STUDIOLLM_KEY.label: "StudioLLM-Schlüssel (optional)"
+      indiebox.app.var.HAHNAIR_STUDIOLLM_KEY.description: "Zugang zum StudioLLM-Gateway, die zweite Wahl in Chat und Agent-Engine. Leer lassen, wenn nur die Modelle der Box benutzt werden sollen. Achtung: mit StudioLLM verlassen Inhalte die Box."
+      indiebox.app.var.HAHNAIR_STUDIOLLM_KEY.required: "false"
+      indiebox.app.var.HAHNAIR_STUDIOLLM_KEY.secret: "true"
+      indiebox.app.var.HAHNAIR_SERPER_KEY.label: "Serper-Schlüssel (Websuche)"
+      indiebox.app.var.HAHNAIR_SERPER_KEY.description: "Schlüssel für serper.dev. Leer lassen, wenn die Websuche im Chat aus bleiben soll."
+      indiebox.app.var.HAHNAIR_SERPER_KEY.required: "false"
+      indiebox.app.var.HAHNAIR_SERPER_KEY.secret: "true"
+
+  # ---- der Chat: indie-chat + config/ (hinter dem Router) ---------------------
+  hahnair-chat-server:
+    image: ghcr.io/brainbot-com/hahnair-chat:${HAHNAIR_CHAT_TAG:-0.1.3}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      PORT: "3000"
+      PYTHON: /opt/venv/bin/python
+      INDIE_DATA_DIR: /data
+      ENCRYPTION_KEY: ${HAHNAIR_CHAT_ENCRYPTION_KEY:?set HAHNAIR_CHAT_ENCRYPTION_KEY in the box .env}
+      INDIE_ADMIN_EMAIL: ${HAHNAIR_CHAT_ADMIN_EMAIL:?set HAHNAIR_CHAT_ADMIN_EMAIL in the box .env}
+      INDIE_ADMIN_PASSWORD: ${HAHNAIR_CHAT_ADMIN_PASSWORD:?set HAHNAIR_CHAT_ADMIN_PASSWORD in the box .env}
+      INDIE_ADMIN_NAME: ${HAHNAIR_CHAT_ADMIN_NAME:-Admin}
+      # config/mcp-servers.json interpoliert ${HAHNAIR_MCP_TOKEN} in den
+      # Authorization-Header der globalen MCP-Zeile `cmdb`.
+      HAHNAIR_MCP_TOKEN: ${HAHNAIR_MCP_TOKEN:?set HAHNAIR_MCP_TOKEN in the box .env}
+
+      # ---- LLM: die Modelle der Box zuerst ---------------------------------
+      INDIE_CONFIG_DIR: /config-indiebox
+      EXTRA_ALLOWED_HOSTS: ollama
+      STUDIOLLM_KEY: ${HAHNAIR_STUDIOLLM_KEY:-}
+      INDIEROUTER_KEY: ${HAHNAIR_INDIEROUTER_KEY:-}
+
+      # ---- Coding-Agents ---------------------------------------------------
+      AGENT_IMAGE: ghcr.io/brainbot-com/hahnair-agent:${HAHNAIR_AGENT_TAG:-0.1.3}
+      AGENT_NETWORK: llm
+      AGENT_CALLBACK_HOST: hahnair-chat-server
+      # Eigenes Agent-Netz für die eingeschränkten Egress-Stufen, von dieser
+      # Datei deklariert (Herleitung in kreysch-chat indiebox/README.md: ein
+      # vom Server angelegtes Netz ohne Compose-Label lässt `compose up`
+      # scheitern, und ohne dieses Netz löst der Server dort nicht auf).
+      AGENT_NET: hahnair-agent-net
+      AGENT_MEMORY: ${HAHNAIR_AGENT_MEMORY:-1g}
+      AGENT_CPUS: ${HAHNAIR_AGENT_CPUS:-1}
+      AGENT_MAX_CONCURRENT: ${HAHNAIR_AGENT_CONCURRENCY:-3}
+      AGENT_WIKI_VOLUME: hahnair-chat-wiki
+
+      INDIE_HSTS: "1"
+      SERPER_KEY: ${HAHNAIR_SERPER_KEY:-}
+      MCP_SERVERS: "[]"
+      # MCP-Server anderer Apps auf dieser Box, hier benannt und nicht in
+      # config/mcp-servers.json: die Adresse ist eine Tatsache der Box, nicht
+      # der Installation (dieselbe config/ läuft auch in docker-compose.dev.yml,
+      # ohne Brain). indie-chat legt daraus dieselbe globale, verwaltete Zeile an
+      # wie aus der Datei, also für Chat, Agenten, Apps und Routinen.
+      # IndieBrain antwortet als indie-brain-mcp am gemeinsamen `llm`-Netz,
+      # ohne Anmeldung. Ist IndieBrain nicht installiert, löst der Name nicht
+      # auf, der Chat läuft normal weiter und versucht es alle 30 s erneut; die
+      # Werkzeuge erscheinen von selbst, sobald IndieBrain da ist, in beliebiger
+      # Reihenfolge und ohne Neustart. Keine der beiden Apps hängt von der
+      # anderen ab. Abschalten für alle: Einstellungen -> Integrationen (der
+      # Schalter gehört dem Admin). Andere Adresse: HAHNAIR_BRAIN_MCP_URL in der
+      # .env der Box.
+      MANAGED_MCP_SERVERS: '{"indiebrain":{"url":"${HAHNAIR_BRAIN_MCP_URL:-http://indie-brain-mcp:9000/mcp}"}}'
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/hahnair/chat:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - default
+      - llm
+      - agent
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- Agent-Image auf die Box holen (kein Dienst, nur der Pull) -------------
+  hahnair-agent-image:
+    image: ghcr.io/brainbot-com/hahnair-agent:${HAHNAIR_AGENT_TAG:-0.1.3}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: "no"
+    command: ["sh", "-c", "echo hahnair-agent image present on the box"]
+
+  # ---- CMDB-Sidecar: i-doit als MCP-Server, nur lesend -------------------------
+  # Chat und Apps erreichen ihn über `default`, die Agent-Container über `llm`,
+  # jeweils als http://hahnair-chat-cmdb:9100 (config/mcp-servers.json,
+  # config/connectors.json). Auf den eingeschränkten Egress-Stufen laufen die
+  # Agent-Container im Agent-Netz, wo er nicht auflöst; dort gehen ihre
+  # MCP-Aufrufe über den Chat (indie-chat, AG_MCP_VIA_APP). Die Zugangsdaten zu i-doit liegen in seinem
+  # Datenverzeichnis (settings.json, 0600), gesetzt in der App „CMDB“.
+  # Die Box braucht Netzzugang zu i-doit.
+  hahnair-chat-cmdb:
+    image: ghcr.io/brainbot-com/hahnair-cmdb:${HAHNAIR_CMDB_TAG:-0.1.3}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      MCP_TOKEN: ${HAHNAIR_MCP_TOKEN:?set HAHNAIR_MCP_TOKEN in the box .env}
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/hahnair/cmdb:/data
+    networks:
+      - default
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+# Router-Konfiguration inline: eine Installation ist genau eine Compose-Datei,
+# Nebendateien werden nicht hochgeladen (so auch crefo-chat).
+configs:
+  hahnair-router-caddyfile:
+    content: |
+      :80 {
+          # Externe MCP-Clients. Nur genau dieser Pfad, auf /mcp des Dienstes;
+          # dort gilt ein Zugang aus der App (Authorization: Bearer <Token>).
+          @mcp path /cmdb/mcp /cmdb/mcp/
+          handle @mcp {
+              rewrite * /mcp
+              reverse_proxy hahnair-chat-cmdb:9100 {
+                  flush_interval -1
+              }
+          }
+          # Alles andere ist der Chat. flush_interval -1 hält SSE ungepuffert.
+          handle {
+              reverse_proxy hahnair-chat-server:3000 {
+                  flush_interval -1
+              }
+          }
+      }
+
+networks:
+  default:
+  llm:
+    name: llm
+  agent:
+    name: hahnair-agent-net

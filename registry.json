@@ -661,6 +661,12 @@
           "compose_sha256": "3194179b0ddcde2936986e282d2596addf41072471cb7042f367e934cbd1dded",
           "released_at": "2026-10-01T13:34:13Z",
           "version": "0.1.2"
+        },
+        {
+          "compose_path": "apps/hahnair-chat/0.1.3/compose.yml",
+          "compose_sha256": "50f35c648067aa02aa14d54f860a8eb6a9cb404d0b67e36381ac038e2854e9c5",
+          "released_at": "2026-10-05T15:11:14Z",
+          "version": "0.1.3"
         }
       ]
     },
