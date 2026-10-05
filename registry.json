@@ -743,6 +743,12 @@
           "compose_sha256": "56bb9f106eaa97f332d0f0c95893c9e12ed5959cf5331d1ed707b3d33d8ff0fe",
           "released_at": "2026-10-01T09:33:00Z",
           "version": "0.2.0"
+        },
+        {
+          "compose_path": "apps/indie-brain/0.2.1/compose.yml",
+          "compose_sha256": "f2bcddf24e91a7b21c424fdfe3f4ef890149ac9eab861b87b292966912474f50",
+          "released_at": "2026-10-05T12:17:41Z",
+          "version": "0.2.1"
         }
       ]
     },

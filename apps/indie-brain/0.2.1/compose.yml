@@ -1,0 +1,493 @@
+# indie-brain as an Indie Box app: a company knowledge base (Onyx + the search
+# app + the Onyx MCP server + kb-admin) on one box, on the box's own models.
+#
+# See brainbot-com/indie-box docs/app-integration.md: an app is a Compose file
+# whose ONE labelled service gets a landing-page card, a public port from the
+# reserved 9200-9249 range, and a gateway route. Only this file is uploaded, so
+# everything of ours is baked into images (indiebox/Dockerfile) and every bind
+# mount is an absolute path under the box's data dir. docs/indiebox-app.md is
+# the long version of what follows.
+#
+# One port, one router (indie-brain, indiebox/router/nginx.conf):
+#   /            -> /kb/
+#   /kb/         the search page and its API        (indie-brain-search)
+#   /kb-admin/   scopes, tokens and user accounts   (indie-brain-admin)
+#   /api, /...   the Onyx admin + chat UI           (indie-brain-web, indie-brain-api)
+# The MCP server is not routed: it answers without a login, so it is reachable
+# only on the box's `llm` network, as http://indie-brain-mcp:9000/mcp, where the
+# box's chat apps and agents run.
+#
+# Models: by default everything runs on the box's own Ollama, reached by name on
+# the shared `llm` network -- embeddings (Onyx indexing and search queries),
+# reranking and Onyx's chat. Nothing leaves the box. indie-brain-models pulls the
+# embedder and the reranker into that Ollama if they are missing (the reranker
+# is not in the box's model catalog), and the api server's first start points a
+# fresh Onyx at them (indiebox/onyx/seed_local_models.py). Onyx's own CPU model
+# servers are therefore not part of the app (DISABLE_MODEL_SERVER below).
+#
+# Networks: only the router is on `default`, the network the gateway and every
+# other app share. Postgres, OpenSearch and Redis sit on the app's own network,
+# out of reach of other apps. `llm` carries what talks to Ollama, plus the MCP
+# and search API the box's agents use.
+#
+# The app's public address is not configured: every component that needs it
+# derives it at start from the box's gateway (its primary hostname, whether it
+# serves HTTPS, and the port it gave this app; indiebox/public-url.sh). Onyx is
+# pinned to the release our connector patches were copied from (v4.2.5, one
+# ONYX_VERSION in indiebox/Dockerfile for the backend and the web server).
+
+services:
+
+  # ---- the app: the ONE labelled service, so the ONE gateway route -----------
+  indie-brain:
+    image: ghcr.io/brainbot-com/indie-brain-router:${INDIE_BRAIN_TAG:-0.2.1}
+    # "stable" normally; "encrypted" on boxes with encrypted storage, which
+    # makes this wait for the unlock. Every service of the app follows the
+    # box's storage mode: the index and the connector credentials are company
+    # data.
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.app.name: "Indie Brain"
+      indiebox.app.icon: "brain"
+      indiebox.app.description: "Firmen-Wissensbasis: Onyx indexiert Google Drive, GitHub, Gmail und Websites; hybride Suche mit Reranking, ein MCP-Server für Agenten und Zugriffsbereiche je Gruppe, alles mit den eigenen Modellen der Box."
+      # The port INSIDE the container. The gateway forwards the public port
+      # here; the app never publishes a host port itself.
+      indiebox.app.http-port: "8080"
+      # App version (read straight off this label by GET /v1/apps). It equals
+      # the git tag (v<version>) and the tag every first-party image is pinned
+      # to. A LITERAL, not an interpolation: a box has to report the version it
+      # is running. Written by indiebox/pin-images.sh together with the image
+      # defaults, so they move as one; do not edit by hand.
+      # 0.0.0 until the first release is cut.
+      indiebox.app.version: "0.2.1"
+
+      # ---- extra landing cards under the same port -----------------------------
+      indiebox.app.link.onyx.name: "Indie Brain: Onyx admin"
+      indiebox.app.link.onyx.path: "/admin/indexing/status"
+      indiebox.app.link.onyx.icon: "database"
+      indiebox.app.link.access.name: "Indie Brain: access"
+      indiebox.app.link.access.path: "/kb-admin/"
+      indiebox.app.link.access.icon: "key"
+
+      # ---- the values the operator supplies (docs/app-integration.md,
+      #      "Required variables") --------------------------------------------
+      # NB `required` defaults to TRUE, so every optional one says so out loud.
+      # NB no `.default` on the optional ones on purpose: a declared default is
+      # PERSISTED to the .env at install and then outranks the `${VAR:-...}`
+      # fallback below forever, so a later release could never move it. The
+      # descriptions name the fallback instead.
+      indiebox.app.var.INDIE_BRAIN_ADMIN_PASSWORD.label: "Access admin password"
+      indiebox.app.var.INDIE_BRAIN_ADMIN_PASSWORD.description: "Password of the access panel (the 'Indie Brain: access' card), where scoped tokens and search accounts are made. Re-applied on every start, so changing it here takes effect after the app restarts. The Onyx admin is a separate account: the first person to sign up in Onyx becomes its admin."
+      indiebox.app.var.INDIE_BRAIN_ADMIN_PASSWORD.secret: "true"
+      # Letters and digits only: typed at a login. The form shows a generated
+      # one, so it can be noted before saving.
+      indiebox.app.var.INDIE_BRAIN_ADMIN_PASSWORD.generate: "alnum:20"
+
+      indiebox.app.var.INDIE_BRAIN_SEARCH_TOKEN.label: "General search token"
+      indiebox.app.var.INDIE_BRAIN_SEARCH_TOKEN.description: "Token of the general scope (everything except private-* document sets). The search page hands it to its visitors as a cookie, the MCP server uses it, and agents on the box can send it to the search API as X-Onyx-Token. Changing it signs every browser and agent holding the old one out."
+      indiebox.app.var.INDIE_BRAIN_SEARCH_TOKEN.secret: "true"
+      # Travels in a header, a ?token= URL and a cookie: letters and digits.
+      indiebox.app.var.INDIE_BRAIN_SEARCH_TOKEN.generate: "alnum:43"
+
+      indiebox.app.var.INDIE_BRAIN_DB_PASSWORD.label: "Database password"
+      indiebox.app.var.INDIE_BRAIN_DB_PASSWORD.description: "Password of Onyx's internal PostgreSQL, which also holds the connector credentials. Only the app ever needs it; Generate makes a long random one. It is fixed when the database is first created, so do not change it afterwards."
+      indiebox.app.var.INDIE_BRAIN_DB_PASSWORD.secret: "true"
+      indiebox.app.var.INDIE_BRAIN_DB_PASSWORD.generate: "alnum:32"
+
+      indiebox.app.var.INDIE_BRAIN_OPENSEARCH_PASSWORD.label: "Index password"
+      indiebox.app.var.INDIE_BRAIN_OPENSEARCH_PASSWORD.description: "Admin password of the app's internal OpenSearch index (the app adds the symbol and mixed case OpenSearch insists on). Only the app ever needs it; Generate makes a long random one. It is fixed when the index is first created, so do not change it afterwards."
+      indiebox.app.var.INDIE_BRAIN_OPENSEARCH_PASSWORD.secret: "true"
+      indiebox.app.var.INDIE_BRAIN_OPENSEARCH_PASSWORD.generate: "alnum:32"
+
+      indiebox.app.var.INDIE_BRAIN_AUTH_SECRET.label: "Onyx signing secret"
+      indiebox.app.var.INDIE_BRAIN_AUTH_SECRET.description: "Signs Onyx's password-reset and email-verification links and its other short-lived tokens (Onyx's USER_AUTH_SECRET; Onyx refuses to start without one). Only the app ever needs it; Generate makes one. Changing it later only voids links that are still pending: nobody is signed out."
+      indiebox.app.var.INDIE_BRAIN_AUTH_SECRET.secret: "true"
+      # What Onyx itself suggests: `openssl rand -hex 32`.
+      indiebox.app.var.INDIE_BRAIN_AUTH_SECRET.generate: "hex:32"
+
+      indiebox.app.var.INDIE_BRAIN_EMBEDDING_MODEL.label: "Embedding model"
+      indiebox.app.var.INDIE_BRAIN_EMBEDDING_MODEL.description: "Which Ollama model embeds documents and search queries. Set it BEFORE the first start: Onyx builds its index for this model, and changing it later means a full re-index started from the Onyx admin UI (Search Settings). Pulled into the box's Ollama automatically. Leave empty for: qwen3-embedding:8b"
+      indiebox.app.var.INDIE_BRAIN_EMBEDDING_MODEL.required: "false"
+
+      indiebox.app.var.INDIE_BRAIN_RERANK_MODEL.label: "Reranking model"
+      indiebox.app.var.INDIE_BRAIN_RERANK_MODEL.description: "Which Ollama model reranks the top search hits (a Qwen3-Reranker, called for yes/no logprobs). Pulled into the box's Ollama automatically; 'off' skips reranking and does not pull anything. Leave empty for: dengcao/Qwen3-Reranker-4B:q8_0"
+      indiebox.app.var.INDIE_BRAIN_RERANK_MODEL.required: "false"
+
+      indiebox.app.var.INDIE_BRAIN_CHAT_MODEL.label: "Chat model (Onyx)"
+      indiebox.app.var.INDIE_BRAIN_CHAT_MODEL.description: "Default model of Onyx's own chat, set up once on the first start; afterwards manage it in the Onyx admin UI (LLM). It has to be pulled on the box (Admin > Models). Search and the MCP server do not use it. Leave empty for: qwen3.8:27b"
+      indiebox.app.var.INDIE_BRAIN_CHAT_MODEL.required: "false"
+
+      indiebox.app.var.INDIE_BRAIN_OLLAMA_URL.label: "Ollama URL"
+      indiebox.app.var.INDIE_BRAIN_OLLAMA_URL.description: "Only to use models from somewhere other than this box. Leave empty for the box's own Ollama: http://ollama:11434"
+      indiebox.app.var.INDIE_BRAIN_OLLAMA_URL.required: "false"
+    networks:
+      - default
+      - indie-brain
+    depends_on:
+      # Refuses to start unless the encrypted volume is actually mounted.
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- Onyx ------------------------------------------------------------------------
+  # Service names are prefixed: in the box's merged Compose model a name is
+  # global, and <app>-<role> is also how the admin panel groups an app's
+  # services. Everything else follows Onyx's deployment/docker_compose file.
+  indie-brain-api:
+    image: ghcr.io/brainbot-com/indie-brain-onyx-api:${INDIE_BRAIN_TAG:-0.2.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      <<: &onyx-env
+        # The box's gateway settings, from which the entrypoint derives the
+        # public address (WEB_DOMAIN: login redirects, OAuth callbacks).
+        <<: &box-address
+          GATEWAY_PRIMARY_HOSTNAME: ${GATEWAY_PRIMARY_HOSTNAME:-}
+          GATEWAY_HOSTNAMES: ${GATEWAY_HOSTNAMES:-}
+          GATEWAY_TLS_CONFIG: ${TLS_CONFIG:-}
+          INDIE_BRAIN_PORT: ${INDIEBOX_APP_PORT_INDIE_BRAIN:-}
+        AUTH_TYPE: basic
+        POSTGRES_HOST: indie-brain-db
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: ${INDIE_BRAIN_DB_PASSWORD:?set INDIE_BRAIN_DB_PASSWORD in the box .env}
+        POSTGRES_DB: postgres
+        OPENSEARCH_HOST: indie-brain-opensearch
+        # OpenSearch refuses an admin password without a symbol and mixed case,
+        # which a generated one does not guarantee; the fixed prefix does.
+        OPENSEARCH_ADMIN_PASSWORD: Ib1-${INDIE_BRAIN_OPENSEARCH_PASSWORD:?set INDIE_BRAIN_OPENSEARCH_PASSWORD in the box .env}
+        REDIS_HOST: indie-brain-cache
+        API_SERVER_HOST: indie-brain-api
+        # Uploaded files in Postgres: no MinIO.
+        FILE_STORE_BACKEND: postgres
+        # Embeddings come from Ollama (a LiteLLM provider, seeded on the first
+        # start), so Onyx's CPU model servers are not deployed. This also makes
+        # Onyx skip its GPU probe against them.
+        DISABLE_MODEL_SERVER: "true"
+        DISABLE_TELEMETRY: "true"
+      # Only the api server signs with it, so it is not in the shared Onyx
+      # environment the search app also gets.
+      USER_AUTH_SECRET: ${INDIE_BRAIN_AUTH_SECRET:?set INDIE_BRAIN_AUTH_SECRET in the box .env}
+      # Read by the first-start seed only (indiebox/onyx/seed_local_models.py).
+      INDIE_BRAIN_OLLAMA_URL: ${INDIE_BRAIN_OLLAMA_URL:-http://ollama:11434}
+      INDIE_BRAIN_EMBEDDING_MODEL: ${INDIE_BRAIN_EMBEDDING_MODEL:-qwen3-embedding:8b}
+      INDIE_BRAIN_CHAT_MODEL: ${INDIE_BRAIN_CHAT_MODEL:-qwen3.8:27b}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      # Alembic migrations on a fresh database run before /health answers.
+      start_period: 600s
+    logging: &indie-brain-logging
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "6"
+    networks:
+      - indie-brain
+      - llm
+    depends_on:
+      indie-brain-db:
+        condition: service_healthy
+      indie-brain-opensearch:
+        condition: service_started
+      indie-brain-cache:
+        condition: service_started
+      secure-gate:
+        condition: service_completed_successfully
+
+  indie-brain-background:
+    image: ghcr.io/brainbot-com/indie-brain-onyx-worker:${INDIE_BRAIN_TAG:-0.2.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      <<: *onyx-env
+      # Capped the way the KB host is (onyx/docker-compose.ai-knowledge.yml):
+      # the box shares its memory with the GPU, embeddings are serialised by
+      # one Ollama anyway, and the defaults were written for a 96 GB server.
+      CELERY_WORKER_LIGHT_CONCURRENCY: "4"
+      CELERY_WORKER_DOCPROCESSING_CONCURRENCY: "2"
+      CELERY_WORKER_DOCFETCHING_CONCURRENCY: "2"
+      CELERY_WORKER_PRIMARY_CONCURRENCY: "2"
+      CELERY_WORKER_HEAVY_CONCURRENCY: "1"
+      CELERY_WORKER_MONITORING_CONCURRENCY: "1"
+      CELERY_WORKER_SCHEDULED_TASKS_CONCURRENCY: "1"
+      CELERY_WORKER_USER_FILE_PROCESSING_CONCURRENCY: "1"
+      # The Gmail filter, set in kb-admin's Settings; read by our Gmail
+      # connector on every run. Not the token store: only this file.
+      KB_SETTINGS_FILE: /settings/settings.json
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/settings:/settings:ro
+    logging: *indie-brain-logging
+    networks:
+      - indie-brain
+      - llm
+    depends_on:
+      indie-brain-db:
+        condition: service_healthy
+      indie-brain-opensearch:
+        condition: service_started
+      indie-brain-cache:
+        condition: service_started
+      secure-gate:
+        condition: service_completed_successfully
+
+  indie-brain-web:
+    image: ghcr.io/brainbot-com/indie-brain-onyx-web:${INDIE_BRAIN_TAG:-0.2.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      # WEB_DOMAIN comes from these: without it Onyx's redirects name the
+      # container's own address.
+      <<: *box-address
+      INTERNAL_URL: http://indie-brain-api:8080
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging: *indie-brain-logging
+    networks:
+      - indie-brain
+    depends_on:
+      indie-brain-api:
+        condition: service_started
+      secure-gate:
+        condition: service_completed_successfully
+
+  indie-brain-db:
+    image: postgres:15.2-alpine
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    shm_size: 1g
+    command: -c max_connections=250
+    labels:
+      # Backups pause it, so the data files they copy are consistent.
+      indiebox.pause-for-backup: "true"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${INDIE_BRAIN_DB_PASSWORD:?set INDIE_BRAIN_DB_PASSWORD in the box .env}
+    volumes:
+      # Absolute path under the data dir (only this file is uploaded, so a
+      # relative source would resolve to a directory that does not exist). It
+      # holds the connector credentials, so it follows the encrypted volume.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/onyx-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - indie-brain
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # A bind mount starts out owned by root, and OpenSearch runs as uid 1000
+  # (Onyx upstream uses a named volume, which the image initialises; a named
+  # volume cannot follow the encrypted storage). Same image, so nothing extra
+  # to pull; a no-op once the directory is right.
+  indie-brain-opensearch-init:
+    image: opensearchproject/opensearch:3.6.0
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: "no"
+    user: "0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'd=/usr/share/opensearch/data; [ "$$(stat -c %u "$$d")" = 1000 ] || chown -R 1000:1000 "$$d"'
+    network_mode: none
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/opensearch:/usr/share/opensearch/data
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  indie-brain-opensearch:
+    image: opensearchproject/opensearch:3.6.0
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.pause-for-backup: "true"
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: Ib1-${INDIE_BRAIN_OPENSEARCH_PASSWORD:?set INDIE_BRAIN_OPENSEARCH_PASSWORD in the box .env}
+      # As on both KB hosts: no memory lock, and a 2 GB heap -- the kNN graphs
+      # live OFF heap, so a bigger heap would steal what vector search needs.
+      bootstrap.memory_lock: "false"
+      OPENSEARCH_JAVA_OPTS: "-Xms2g -Xmx2g"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/opensearch:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf -u \"admin:$$OPENSEARCH_INITIAL_ADMIN_PASSWORD\" https://localhost:9200/_cluster/health >/dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    logging: *indie-brain-logging
+    networks:
+      - indie-brain
+    depends_on:
+      indie-brain-opensearch-init:
+        condition: service_completed_successfully
+      secure-gate:
+        condition: service_completed_successfully
+
+  indie-brain-cache:
+    image: redis:7.4-alpine
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    # Ephemeral by design, as upstream: nothing in Redis has to survive.
+    command: redis-server --save "" --appendonly no
+    tmpfs:
+      - /data
+    networks:
+      - indie-brain
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- the search app (docs/search-app.md) ------------------------------------------
+  # The single enforcement point for access scopes. Served at /kb/ by the
+  # router, and to the box's agents at http://indie-brain-search:8500 on `llm`.
+  indie-brain-search:
+    image: ghcr.io/brainbot-com/indie-brain-search:${INDIE_BRAIN_TAG:-0.2.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      # Onyx's Postgres (Gmail attachments, the curation endpoints) and
+      # OpenSearch credentials, exactly as the Onyx services get them.
+      <<: *onyx-env
+      ONYX_SEARCH_OS_URL: https://indie-brain-opensearch:9200
+      # "auto": search the index Onyx indexes into, and embed queries with the
+      # model it indexes with, both read from Onyx's search settings.
+      ONYX_SEARCH_INDEX: auto
+      ONYX_EMBED_MODEL: auto
+      ONYX_SEARCH_EMBED_VIA: ollama
+      ONYX_OLLAMA_BASE: ${INDIE_BRAIN_OLLAMA_URL:-http://ollama:11434}
+      ONYX_RERANK_MODEL: ${INDIE_BRAIN_RERANK_MODEL:-dengcao/Qwen3-Reranker-4B:q8_0}
+      ONYX_SEARCH_TOKEN: ${INDIE_BRAIN_SEARCH_TOKEN:?set INDIE_BRAIN_SEARCH_TOKEN in the box .env}
+      # Scopes and accounts, written by kb-admin (read-only here).
+      KB_STORE_DIR: /store
+      # The reranking instruction, set in kb-admin's Settings.
+      KB_SETTINGS_FILE: /settings/settings.json
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/access:/store:ro
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/settings:/settings:ro
+    networks:
+      - indie-brain
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- the MCP server (docs/onyx-mcp.md) ------------------------------------------
+  # No route: agents on the box reach it as http://indie-brain-mcp:9000/mcp.
+  indie-brain-mcp:
+    image: ghcr.io/brainbot-com/indie-brain-mcp:${INDIE_BRAIN_TAG:-0.2.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      ONYX_SEARCH_URL: http://indie-brain-search:8500/api/search
+      ONYX_SEARCH_TOKEN: ${INDIE_BRAIN_SEARCH_TOKEN:?set INDIE_BRAIN_SEARCH_TOKEN in the box .env}
+      # ONYX_PUBLIC_BASE (attachment links in tool results) comes from these.
+      <<: *box-address
+    networks:
+      - indie-brain
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- kb-admin (docs/access-scopes.md) ---------------------------------------------
+  # Served at /kb-admin/ behind its own password. No Docker socket: that is root
+  # on the box, so per-scope MCP containers are not offered here; a scope's
+  # token works against the search API directly.
+  indie-brain-admin:
+    image: ghcr.io/brainbot-com/indie-brain-admin:${INDIE_BRAIN_TAG:-0.2.1}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      KB_STORE_DIR: /store
+      # Its Settings (Gmail filter, reranking instruction), read by the Gmail
+      # connector and the search app.
+      KB_SETTINGS_FILE: /settings/settings.json
+      KB_ADMIN_PASSWORD: ${INDIE_BRAIN_ADMIN_PASSWORD:?set INDIE_BRAIN_ADMIN_PASSWORD in the box .env}
+      KB_MCP_SPAWN: "false"
+      KB_GENERAL_MCP_URL: http://indie-brain-mcp:9000/mcp
+      # KB_SEARCH_PUBLIC_URL (the personal ?token= URLs) comes from these.
+      <<: *box-address
+      # Lists Onyx's document sets, so the private-* ones can be granted.
+      POSTGRES_HOST: indie-brain-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${INDIE_BRAIN_DB_PASSWORD:?set INDIE_BRAIN_DB_PASSWORD in the box .env}
+      POSTGRES_DB: postgres
+    volumes:
+      # The AES-GCM store and its key; created on the first start.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/access:/store
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/indie-brain/settings:/settings
+    networks:
+      - indie-brain
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- the models, pulled into the box's Ollama ------------------------------------
+  # One-shot: asks Ollama for the embedder and the reranker and pulls whichever
+  # is missing, then exits. Every start of the app re-checks, which costs one
+  # request per model once they are there. Nothing waits for it: the Onyx seed
+  # knows the embedder's width without the download, and search degrades to
+  # the unreranked order until the reranker is in.
+  indie-brain-models:
+    image: curlimages/curl:8.22.0
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: "no"
+    environment:
+      OLLAMA_URL: ${INDIE_BRAIN_OLLAMA_URL:-http://ollama:11434}
+      MODELS: ${INDIE_BRAIN_EMBEDDING_MODEL:-qwen3-embedding:8b} ${INDIE_BRAIN_RERANK_MODEL:-dengcao/Qwen3-Reranker-4B:q8_0}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        i=0
+        until curl -fsS -m 10 -o /dev/null "$$OLLAMA_URL/api/version"; do
+          i=$$((i + 1))
+          [ "$$i" -lt 60 ] || { echo "Ollama not reachable at $$OLLAMA_URL"; exit 1; }
+          sleep 10
+        done
+        for m in $$MODELS; do
+          case "$$m" in off|none) continue ;; esac
+          if curl -fsS -m 30 -o /dev/null -d "{\"model\":\"$$m\"}" "$$OLLAMA_URL/api/show"; then
+            echo "$$m: present"
+            continue
+          fi
+          echo "$$m: pulling"
+          curl -fsS -d "{\"model\":\"$$m\",\"stream\":false}" "$$OLLAMA_URL/api/pull" || { echo "$$m: pull failed"; exit 1; }
+          echo
+        done
+    networks:
+      - llm
+
+networks:
+  default:
+  # The app's own network: the databases are reachable from nothing else.
+  indie-brain:
+  # Platform-provided shared network (app-integration.md "Platform contract"):
+  # where the box's Ollama answers as `ollama`.
+  llm:
+    name: llm
