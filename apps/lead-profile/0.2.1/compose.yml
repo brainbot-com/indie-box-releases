@@ -1,0 +1,152 @@
+# Lead Profiler as an Indie Box app.
+#
+# Install/update via the box's app catalog (the registry entry lives in
+# brainbot-com/indie-box under registry/; the app id is `lead-profile`).
+# Uninstall: DELETE /api/docker-controller/v1/apps/lead-profile (keeps data).
+#
+# Shape of the app: TWO services, ONE of them labelled, ONE port. Admin UI,
+# REST/MCP for consumers and /healthz are all served by the same uvicorn
+# process on :8000 (docs/ARCHITECTURE.md, "ein Container, drei Oberflaechen
+# auf einem Port"). No Caddy front is needed here, unlike crefo-import and
+# crefo-chat: there is only one HTTP upstream to route to.
+#
+# The second service is the database, `lead-profile-db` (W36,
+# docs/architektur.md §6): persistence is PostgreSQL, not the DuckDB file of
+# W28. The contract allows this -- an app may bring its own services, only the
+# LABELLED service must be unique, and a service named after the app's UI
+# service is joined to the same app by the box (indie-box-app-vertrag.md,
+# "Welche Services gehoeren zu einer App"). Hence the `-db` suffix rather than
+# any other name.
+#
+# - Exactly one service carries indiebox.app.* labels; the box renders the
+#   gateway route from them. The db service carries none.
+# - No `ports:` (the gateway owns ingress), no `build:` (single-file upload;
+#   the image comes from ghcr.io).
+# - Bind mount is the encrypted-storage three-liner (indie-box-app-vertrag.md):
+#   profile + secure-gate + an absolute path under SECURE_STORAGE_DIR/DATA_DIR.
+#   BOTH services get the three-liner: the engine keeps secret.key and the
+#   model artefacts under /data, and the database keeps the customer data under
+#   /data/db -- so both belong on the encrypted volume when the box has one.
+# - indiebox.pause-for-backup moved to the DATABASE service (W36). It is the
+#   one holding files a backup must catch in a consistent state; the engine no
+#   longer writes a database file at all.
+# - No `user:`: Docker creates the bind-mounted host directory as root:root
+#   on the very first start, which is fine here because the engine itself
+#   does not drop privileges.
+# - Network `llm`: an operator-bound `llm` role can point at the box's own
+#   Ollama, reachable as http://ollama:11434 only from this network (never
+#   defined in this file -- that is the platform's job). `default` stays so
+#   the app is still reachable through the gateway/its own kachel; dropping it
+#   would be a silent outage (indie-box-app-vertrag.md, "Die Fallen"). This
+#   mirrors crefo-chat.compose.yml exactly (`llm: name: llm`, not marked
+#   `external:` -- checked against that original rather than assumed).
+# - Provider keys, models and role bindings are configured in the app's own
+#   Oberflaeche after install, never here (Kanon-Regel 5). The two
+#   indiebox.app.var.* below are not provider settings but what the app needs
+#   to exist at all: the database password and the first login.
+# - Anzeigename ("Lead Profiler"), Icon-Slug ("target-arrow") and die
+#   Beschreibung sind eine vorlaeufige Annahme (Ü1 in docs/KONZEPT.md ist noch
+#   offen), uebernommen aus docs/ARCHITECTURE.md Abschnitt F.
+# - Version bump = run the Release workflow (.github/workflows/release.yml).
+#   It re-tags the already-tested image by digest, rewrites the image tag
+#   default AND the indiebox.app.version label together
+#   (indiebox/pin-images.sh), tags v<version> and opens the registry PR on
+#   indie-box. Do not hand-edit those two lines: that is how the label and
+#   the image it claims to ship come apart, which is why
+#   `pin-images.sh --check` runs on every PR that touches indiebox/.
+# - The image default below is NOT `:-latest` (the platform contract forbids
+#   a floating tag; compose-check.yml asserts this). Before the first real
+#   release it is pinned to the placeholder 0.1.0, exactly like
+#   indiebox.app.version below -- pin-images.sh keeps both in lockstep from
+#   here on.
+
+services:
+  lead-profile: # the labelled service; name == app id
+    image: ghcr.io/brainbot-com/lead-profile:${LEAD_PROFILE_TAG:-0.2.1}
+    profiles: ["${SECURE_STORAGE_PROFILE:-stable}"]
+    restart: always
+    labels:
+      indiebox.app.name: "Lead Profiler"
+      indiebox.app.icon: "target-arrow"
+      indiebox.app.http-port: "8000"
+      indiebox.app.version: "0.2.1"
+      indiebox.app.description: "Aus einem Lead wird ein belegtes Profil mit Score, Herkunft und Belegen."
+      # Die Variable ist die EINE Pflichtangabe beim Installieren: das Passwort
+      # der App-Datenbank. Sie liegt danach in der verwalteten .env der Box und
+      # ueberlebt Updates, Neustarts und Rollbacks.
+      indiebox.app.var.LEAD_PROFILE_DB_PASSWORD.label: "Datenbank-Passwort"
+      indiebox.app.var.LEAD_PROFILE_DB_PASSWORD.description: "Passwort der mitgelieferten Datenbank. Am einfachsten „Erzeugen“ drücken, merken muss man es sich nicht. Nach der Installation nicht mehr ändern: die Datenbank behält das Passwort vom ersten Start, die App kommt danach nicht mehr an ihre Daten."
+      indiebox.app.var.LEAD_PROFILE_DB_PASSWORD.secret: "true"
+      indiebox.app.var.LEAD_PROFILE_DB_PASSWORD.required: "true"
+      # alnum, weil das Passwort in DATABASE_URL landet: base64 brächte `+`, `/`
+      # und `=` in die URL (app-integration.md, "Generated values"). Die Warnung
+      # in der Beschreibung ist Absicht: POSTGRES_PASSWORD wirkt nur beim
+      # allerersten Start, ein später geänderter Wert passt nicht mehr zur DB.
+      indiebox.app.var.LEAD_PROFILE_DB_PASSWORD.generate: "alnum:32"
+      # Der erste Zugang. Ohne ihn führt die Kachel auf einer frischen Box zu
+      # einer Anmeldung, an der sich niemand anmelden kann, denn die
+      # Benutzerverwaltung liegt dahinter. Die Engine legt damit `admin` an,
+      # aber nur solange die App noch keinen Benutzer hat
+      # (auth.service.ensure_first_admin). Rezept nach dem Box-Muster
+      # `*_ADMIN_PASSWORD` in app-integration.md.
+      indiebox.app.var.LEAD_PROFILE_ADMIN_PASSWORD.label: "Passwort für den ersten Zugang"
+      indiebox.app.var.LEAD_PROFILE_ADMIN_PASSWORD.description: "Damit melden Sie sich nach der Installation als „admin“ an und legen in der Konfiguration die Zugänge für alle anderen an. Vor dem Speichern notieren. Gilt nur für die erste Anmeldung: Passwörter ändern Sie danach in der App, nicht hier."
+      indiebox.app.var.LEAD_PROFILE_ADMIN_PASSWORD.secret: "true"
+      indiebox.app.var.LEAD_PROFILE_ADMIN_PASSWORD.required: "true"
+      indiebox.app.var.LEAD_PROFILE_ADMIN_PASSWORD.generate: "alnum:20"
+    environment:
+      DATA_DIR: /data
+      LEAD_PROFILE_ADMIN_PASSWORD: ${LEAD_PROFILE_ADMIN_PASSWORD:-}
+      # Die Datenbank ist ein Dienst DIESER App, erreichbar unter ihrem
+      # Servicenamen im Projektnetz. Kein Port nach aussen.
+      DATABASE_URL: postgresql://lead_profile:${LEAD_PROFILE_DB_PASSWORD:?Datenbank-Passwort fehlt}@lead-profile-db:5432/lead_profile
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/lead-profile:/data
+    networks:
+      - default
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+      # Ohne das startet die Engine gegen eine Datenbank, die noch
+      # initialisiert wird, und stirbt beim Anlegen des Schemas.
+      lead-profile-db:
+        condition: service_healthy
+
+  # Die Datenbank der App (W36). Traegt bewusst KEINE indiebox.app.*-Labels:
+  # der Vertrag verlangt genau einen gelabelten Service, und der Name
+  # `lead-profile-db` genuegt der Box, um den Dienst dieser App zuzurechnen.
+  lead-profile-db:
+    # pgvector-Variante des offiziellen Images: die Erweiterung `vector` fuer
+    # die Aehnlichkeitssuche ueber Aussagen muss die DATENBANK mitbringen, das
+    # App-Image kann sie nicht nachinstallieren. Gepinnt wie jedes Image hier.
+    image: pgvector/pgvector:pg17
+    profiles: ["${SECURE_STORAGE_PROFILE:-stable}"]
+    restart: always
+    labels:
+      # Hier liegen die Kundendaten, also gehoert die Backup-Pause auf DIESEN
+      # Service, nicht auf die Engine.
+      indiebox.pause-for-backup: "true"
+    environment:
+      POSTGRES_USER: lead_profile
+      POSTGRES_PASSWORD: ${LEAD_PROFILE_DB_PASSWORD:?Datenbank-Passwort fehlt}
+      POSTGRES_DB: lead_profile
+      # Unterverzeichnis, nicht der Mount-Punkt selbst: Postgres verweigert den
+      # Start, wenn im Datenverzeichnis Fremdes liegt (lost+found auf manchen
+      # Volumes), und die Engine legt daneben ihre eigenen Dateien ab.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/lead-profile/db:/var/lib/postgresql/data
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lead_profile -d lead_profile"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+networks:
+  default:
+  llm:
+    name: llm
