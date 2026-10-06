@@ -1,0 +1,497 @@
+# Schulpost: der Demo-Mailstack des Gymnasiums Lindenhof als EINE Indie-Box-App
+# (brainbot-com/indie-box docs/app-integration.md: eine App ist ein
+# Compose-Dienst mit indiebox.app.*-Labels; die Box leitet daraus die Kachel,
+# einen öffentlichen Port aus dem reservierten Bereich und die Gateway-Route ab).
+#
+# Fünf Dienste, eine Kachel:
+#
+#   gateway (:92xx) -> bechtle-mail (Caddy, :80)
+#                        |-- /            -> bechtle-mail-webmail    (Roundcube)
+#                        |-- /aussenwelt/ -> bechtle-mail-aussenwelt (Mailpit)
+#   bechtle-mail-server  (docker-mailserver: Postfix + Dovecot, IMAP 143 / SMTP 25,
+#                         auch auf `llm`, damit der Schulpost-Sidecar der App
+#                         bechtle-chat ihn unter seinem Dienstnamen erreicht)
+#   bechtle-mail-seed    (ein Schuss: spielt den Demo-Korpus per IMAP APPEND ein)
+#
+# Das ist die ERSTE Hälfte des Demos und wird zuerst installiert; die zweite,
+# bechtle-chat (bechtle-chat.compose.yml), findet bechtle-mail-server auf `llm`
+# und bekommt BECHTLE_MAIL_PASSWORD von der Box vorbelegt, weil beide Apps den
+# Wert unter demselben Namen deklarieren.
+#
+# Nichts verlässt die Box: DEFAULT_RELAY_HOST schickt JEDE Mail an eine fremde
+# Domain in die Außenwelt (Mailpit), Mail an die Schuldomain bleibt lokal. Die
+# Schuldomain gymnasium-lindenhof.example ist eine RFC-2606-Domain und löst
+# nirgends auf; nur Elternadressen tragen echte Verbraucher-Domains, und Post
+# an sie erreicht immer nur Mailpit.
+#
+# Die Image-Tags der ZWEI eigenen Images und das indiebox.app.version-Label
+# werden nur zusammen geschrieben: indiebox/pin-mail.sh --version x.y.z.
+# Drittanbieter (docker-mailserver als Basis, Roundcube, Mailpit, Caddy) sind
+# auf feste Tags gepinnt und stehen NICHT in der Pin-Tabelle. Ein
+# BECHTLE_*_TAG in der .env der Box übersteuert den Pin für genau eine
+# Komponente.
+#
+# Von Hand statt aus dem Katalog:
+#
+#   indiebox/install.sh bechtle-mail indiebox/bechtle-mail.compose.yml <box-host>
+#
+# Lokal ohne Box: ci/verify-mail.sh (mit ci/gate.yml als secure-gate-Stub und
+# ci/ports.yml für Host-Ports) oder docker-compose.dev.yml an der Wurzel.
+
+services:
+
+  # ---- die App: der EINE gelabelte Dienst = der Pfad-Router -----------------
+  bechtle-mail:
+    image: caddy:2.11.2-alpine
+    # "stable" im Normalfall, "encrypted" auf Boxen mit verschlüsseltem
+    # Speicher; dann wartet der Dienst auf das Entsperren.
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.app.name: "Schulpost (Webmail)"
+      # Aus der Auswahlliste in dashboard/frontend/src/services/appIcons.ts.
+      indiebox.app.icon: "mail"
+      # Kurzbeschreibung für den Katalog; `registry sync` liest sie von hier.
+      indiebox.app.description: "Demo-Postfächer des Gymnasiums Lindenhof: Webmail unter /, die Außenwelt (alle Mails an fremde Adressen) unter /aussenwelt/. Nichts verlässt die Box."
+      # Der Port INNERHALB des Containers; das Gateway leitet hierher.
+      indiebox.app.http-port: "80"
+      # Eine zweite Kachel auf der Startseite der Box, hinter demselben Port:
+      # die Außenwelt (Mailpit) unter /aussenwelt/. Eine App hat genau einen
+      # gelabelten Dienst und damit eine Route; Links sind Kacheln darunter
+      # (indie-box `indiebox.app.link.*`). Eine ältere Box ignoriert die
+      # Labels und zeigt nur die Webmail-Kachel.
+      indiebox.app.link.aussenwelt.name: "Außenwelt (Mailpit)"
+      indiebox.app.link.aussenwelt.path: "/aussenwelt/"
+      indiebox.app.link.aussenwelt.icon: "world"
+      # WÖRTLICH, nie interpoliert: die Box liest dieses Label direkt aus der
+      # installierten Datei, um die laufende Version zu melden. Gleich dem
+      # Git-Tag (v<version>, gemeinsam mit bechtle-chat) und dem Tag der zwei eigenen Images unten.
+      indiebox.app.version: "0.1.10"
+
+      # ---- vom Betrieb gesetzte Werte (indie-box "Required variables") ----
+      # Jeder <NAME> ist genau die Umgebungsvariable, die unten als ${<NAME>}
+      # steht; der Wert liegt einmal in der gemeinsamen .env der Box.
+      #
+      # Optional mit veröffentlichter Vorgabe: die Demo hat EIN Passwort für
+      # drei Konten, und die App bechtle-chat deklariert denselben Namen, damit
+      # ihre Installation den Wert vorbelegt. Wer es hier über "Configure"
+      # ändert, muss es dort ebenso ändern; der Mailserver legt die Konten bei
+      # jedem Start aus der Variable neu an.
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.label: "Demo-Passwort der Postfächer"
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.description: "Ein Passwort für die drei Demo-Konten sekretariat@, schulleitung@ und m.schneider@gymnasium-lindenhof.example (Webmail-Anmeldung mit dem Kurznamen, z. B. sekretariat). Die App bechtle-chat fragt denselben Wert für ihren Schulpost-Sidecar ab."
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.required: "false"
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.secret: "true"
+      indiebox.app.var.BECHTLE_MAIL_PASSWORD.default: "Schule2026!"
+      # Optional: Roundcube verschlüsselt damit Sitzungen und gespeicherte
+      # Passwörter. Ohne festen Wert würfelt das Image bei jedem Start neu,
+      # und jede Sitzung wäre nach einem Neustart ungültig.
+      indiebox.app.var.BECHTLE_MAIL_DES_KEY.label: "Roundcube-Sitzungsschlüssel"
+      indiebox.app.var.BECHTLE_MAIL_DES_KEY.description: "Genau 24 Zeichen. Leer lassen für den Wert aus der App-Datei; nur ändern, wenn das Webmail nicht nur zur Demo dient. „Erzeugen“ trägt 24 zufällige Buchstaben und Ziffern ein."
+      indiebox.app.var.BECHTLE_MAIL_DES_KEY.required: "false"
+      indiebox.app.var.BECHTLE_MAIL_DES_KEY.secret: "true"
+      # Knopf „Erzeugen“ im Formular der Box (indie-box app-integration.md,
+      # "Generated values"): genau 24 Buchstaben und Ziffern, was Roundcube
+      # verlangt und was im PHP-String der Konfiguration unverändert steht.
+      # Eine Box, die das Label noch nicht kennt, übergeht es. Das Passwort
+      # der Postfächer bekommt keinen Knopf: bechtle-chat braucht denselben
+      # Wert.
+      indiebox.app.var.BECHTLE_MAIL_DES_KEY.generate: "alnum:24"
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    networks:
+      - default
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+      bechtle-mail-webmail:
+        condition: service_started
+      bechtle-mail-aussenwelt:
+        condition: service_started
+
+  # ---- Postfix + Dovecot -------------------------------------------------------
+  bechtle-mail-server:
+    image: ghcr.io/brainbot-com/bechtle-mailserver:${BECHTLE_MAILSERVER_TAG:-0.1.10}
+    # DMS leitet die Domain aus dem FQDN ab; OVERRIDE_HOSTNAME ist damit unnötig.
+    hostname: mail.gymnasium-lindenhof.example
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    # Postfix leert die Warteschlange, Dovecot schließt die Indizes.
+    stop_grace_period: 1m
+    labels:
+      # Maildirs und Dovecot-Indizes werden im Backup konsistent eingefroren.
+      indiebox.pause-for-backup: "true"
+    environment:
+      # -- vom Wrapper bechtle-entry.sh gelesen: erzeugt postfix-accounts.cf
+      #    und postfix-virtual.cf bei jedem Start neu ------------------------
+      MAIL_DOMAIN: gymnasium-lindenhof.example
+      MAIL_ACCOUNTS: "sekretariat,schulleitung,m.schneider"
+      MAIL_ALIASES: "krankmeldung:sekretariat,info:sekretariat"
+      MAIL_PASSWORD: ${BECHTLE_MAIL_PASSWORD:-Schule2026!}
+      # -- docker-mailserver ------------------------------------------------
+      ACCOUNT_PROVISIONER: FILE
+      # Leer = TLS aus. DMS schaltet dann selbst Dovecot auf ssl=no und
+      # disable_plaintext_auth=no und Postfix auf smtpd_tls_security_level=none.
+      # Privates Docker-Netz, von außen nicht erreichbar.
+      SSL_TYPE: ""
+      # Alle angeschlossenen Docker-Netze dürfen auf :25 ohne Anmeldung
+      # einliefern (Roundcube, Seed, Sidecar). Das Ziel ist nur lokal oder Mailpit.
+      PERMIT_DOCKER: connected-networks
+      # DER Schutz gegen echte Zustellung: jede Mail an eine fremde Domain
+      # geht an Mailpit. Mail an die Schuldomain bleibt lokal
+      # (virtual_mailbox_domains, ein relayhost greift dort nie).
+      DEFAULT_RELAY_HOST: "[bechtle-mail-aussenwelt]:1025"
+      SPOOF_PROTECTION: "0"
+      ENABLE_RSPAMD: "0"
+      ENABLE_CLAMAV: "0"
+      ENABLE_AMAVIS: "0"
+      ENABLE_SPAMASSASSIN: "0"
+      ENABLE_FAIL2BAN: "0"
+      ENABLE_OPENDKIM: "0"
+      ENABLE_OPENDMARC: "0"
+      ENABLE_POLICYD_SPF: "0"
+      ENABLE_POSTGREY: "0"
+      ENABLE_UPDATE_CHECK: "0"
+      POSTFIX_INET_PROTOCOLS: ipv4
+      DOVECOT_INET_PROTOCOLS: ipv4
+      LOG_LEVEL: info
+      TZ: Europe/Berlin
+    volumes:
+      # Absolute Pfade unter dem Datenverzeichnis der Box (relative Bind-Mounts
+      # weist die Box zurück). Deinstallieren lässt sie stehen, eine
+      # Neuinstallation findet die Postfächer wieder, der Seed überspringt,
+      # was schon da ist.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/bechtle-mail/mail-data:/var/mail
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/bechtle-mail/mail-state:/var/mail-state
+    healthcheck:
+      # Dovecot lauscht erst nach dem gesamten DMS-Setup; :143 ist deshalb das
+      # bessere Signal als :25 (DMS' eigene Prüfung). Der Seed und der Sidecar
+      # der Chat-App warten auf genau dieses "healthy".
+      test: ["CMD-SHELL", "ss --listening --tcp --numeric | grep -q ':143 ' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
+    networks:
+      - default
+      - llm
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- Webmail (Roundcube, SQLite) --------------------------------------------
+  bechtle-mail-webmail:
+    image: roundcube/roundcubemail:1.6.19-apache
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.pause-for-backup: "true"
+    environment:
+      # Der Entrypoint schreibt daraus imap_host/smtp_host OHNE tls://, also
+      # Klartext zum Mailserver; genau das, was DMS hier anbietet.
+      ROUNDCUBEMAIL_DEFAULT_HOST: bechtle-mail-server
+      ROUNDCUBEMAIL_DEFAULT_PORT: "143"
+      ROUNDCUBEMAIL_SMTP_SERVER: bechtle-mail-server
+      ROUNDCUBEMAIL_SMTP_PORT: "25"
+      # Anmeldung mit dem Kurznamen (sekretariat), Roundcube hängt die Domain an.
+      ROUNDCUBEMAIL_USERNAME_DOMAIN: gymnasium-lindenhof.example
+      ROUNDCUBEMAIL_DB_TYPE: sqlite
+      ROUNDCUBEMAIL_REQUEST_PATH: /
+      # bechtle_demo: die Demo-Anmeldung ohne Passwort (configs unten).
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,bechtle_demo
+      ROUNDCUBEMAIL_SKIN: elastic
+      ROUNDCUBEMAIL_DES_KEY: ${BECHTLE_MAIL_DES_KEY:-bechtle-lindenhof-webm24}
+    configs:
+      # Wird vom Entrypoint per include() nach config.docker.inc.php geladen;
+      # uid/gid 33 = www-data im Image.
+      - source: roundcube_config
+        target: /var/roundcube/config/zz-bechtle.inc.php
+        uid: "33"
+        gid: "33"
+        mode: 0444
+      # In den QUELLBAUM des Images, nicht nach /var/www/html: der Entrypoint
+      # kopiert /usr/src/roundcubemail beim Start dorthin, und ein schon
+      # belegtes /var/www/html quittiert er mit Warnung und 10 s Pause.
+      - source: roundcube_demo_plugin
+        target: /usr/src/roundcubemail/plugins/bechtle_demo/bechtle_demo.php
+        uid: "33"
+        gid: "33"
+        mode: 0444
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/bechtle-mail/roundcube-db:/var/roundcube/db
+    networks:
+      - default
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- Außenwelt (Mailpit): alles, was die Schule "nach draußen" schickt -----
+  bechtle-mail-aussenwelt:
+    image: axllent/mailpit:v1.31.3
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.pause-for-backup: "true"
+    environment:
+      MP_SMTP_BIND_ADDR: 0.0.0.0:1025
+      MP_UI_BIND_ADDR: 0.0.0.0:8025
+      # UI und API unter /aussenwelt/; der Router reicht den Präfix durch
+      # (handle, nicht handle_path).
+      MP_WEBROOT: aussenwelt
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: "5000"
+      MP_SMTP_DISABLE_RDNS: "true"
+      TZ: Europe/Berlin
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/bechtle-mail/aussenwelt:/data
+    networks:
+      - default
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- Demo-Korpus einspielen (ein Schuss, idempotent) -------------------------
+  bechtle-mail-seed:
+    image: ghcr.io/brainbot-com/bechtle-mailseed:${BECHTLE_MAILSEED_TAG:-0.1.10}
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    # Läuft einmal je `up` und endet; ein Fehlschlag (Exit 2: Mailserver nicht
+    # erreichbar) bleibt in der Diensteliste der Box sichtbar.
+    restart: "no"
+    environment:
+      SEED_IMAP_HOST: bechtle-mail-server
+      SEED_IMAP_PORT: "143"
+      SEED_DOMAIN: gymnasium-lindenhof.example
+      SEED_ACCOUNTS: "sekretariat,schulleitung,m.schneider"
+      SEED_PASSWORD: ${BECHTLE_MAIL_PASSWORD:-Schule2026!}
+      SEED_CORPUS: /app/demo-data/mails.jsonl
+      # Die jüngsten 8 je INBOX bleiben ungelesen.
+      SEED_UNREAD_NEWEST: "8"
+      # Kopfzeilen-Daten um ganze Wochen verschieben, bis die jüngste Mail in
+      # den letzten 7 Tagen liegt (Wochentage bleiben). Die Daten IM Text
+      # bleiben; vor einer Demo den Korpus mit --anchor neu erzeugen.
+      SEED_DATE_SHIFT: auto
+      SEED_WAIT_SEC: "600"
+    networks:
+      - default
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+      bechtle-mail-server:
+        condition: service_healthy
+
+configs:
+  caddyfile:
+    content: |
+      {
+        admin off
+        auto_https off
+        servers {
+          # X-Forwarded-Proto des Box-Gateways durchreichen, damit Roundcube
+          # HTTPS erkennt (Cookies, absolute Links).
+          trusted_proxies static private_ranges
+        }
+      }
+      :80 {
+        # Außenwelt: Mailpit erwartet den Präfix (MP_WEBROOT), also handle,
+        # nicht handle_path.
+        redir /aussenwelt /aussenwelt/ 308
+        handle /aussenwelt/* {
+          reverse_proxy bechtle-mail-aussenwelt:8025
+        }
+        # Alles andere: Webmail.
+        handle {
+          reverse_proxy bechtle-mail-webmail:80
+        }
+      }
+  # Roundcube auf Deutsch, für die Schule. Das $ in PHP-Variablen ist als $$
+  # geschrieben, damit Compose es nicht interpoliert.
+  roundcube_config:
+    content: |
+      <?php
+      // Wird vom Roundcube-Entrypoint per include() nach config.docker.inc.php geladen.
+      $$config['language'] = 'de_DE';
+      $$config['product_name'] = 'Gymnasium Lindenhof Webmail';
+      $$config['support_url'] = '';
+      $$config['timezone'] = 'Europe/Berlin';
+      $$config['date_format'] = 'd.m.Y';
+      $$config['time_format'] = 'H:i';
+      // Port 25 ist unauthentifiziert (PERMIT_DOCKER=connected-networks).
+      $$config['smtp_user'] = '';
+      $$config['smtp_pass'] = '';
+      $$config['mail_domain'] = 'gymnasium-lindenhof.example';
+      $$config['create_default_folders'] = true;
+      $$config['draft_autosave'] = 60;
+      $$config['refresh_interval'] = 30;
+      $$config['login_autocomplete'] = 2;
+      $$config['skin_logo'] = null;
+      // Demo-Anmeldung (Plugin bechtle_demo): Knoepfe auf der Anmeldeseite,
+      // ./?_demo=<konto> meldet das Konto ohne Passworteingabe an. Das
+      // Passwort ist dasselbe wie beim Mailserver (BECHTLE_MAIL_PASSWORD);
+      // es darf kein einfaches Anfuehrungszeichen enthalten.
+      $$config['bechtle_demo_password'] = '${BECHTLE_MAIL_PASSWORD:-Schule2026!}';
+      $$config['bechtle_demo_accounts'] = [
+        'sekretariat' => 'Sekretariat (Petra Lindner)',
+        'schulleitung' => 'Schulleitung (Dr. Thomas Berger)',
+        'm.schneider' => 'Klassenlehrerin 7b (Maria Schneider)',
+      ];
+
+  # Das Roundcube-Plugin fuer die Demo-Anmeldung (Knoepfe je Konto, ohne
+  # Passwort), als Datei in den Plugin-Ordner des Images gelegt. PHP-$ als $$.
+  roundcube_demo_plugin:
+    content: |
+      <?php
+      /**
+       * Demo-Anmeldung ohne Passwort fuer die drei Schulkonten.
+       *
+       * Auf der Anmeldeseite stehen Knoepfe je Konto; jeder ruft ./?_demo=<konto>
+       * auf, und das Plugin meldet dieses Konto mit dem Demo-Passwort aus der
+       * Konfiguration an, auch wenn gerade ein anderes Konto angemeldet ist
+       * (die alte Sitzung wird beendet). Der nackte Einstieg ./ zeigt immer diese
+       * Kontowahl, und jede angemeldete Seite traegt in der Seitenleiste den Knopf
+       * "Konto wechseln", der dorthin fuehrt. Nur fuer die Demo: das Passwort steht
+       * in der Konfiguration, und jeder, der die Seite erreicht, kommt in jedes
+       * der drei Postfaecher. Das Webmail ist nur innerhalb der Box erreichbar.
+       * Mit &_mbox=<ordner>&_uid=<uid> dazu oeffnet die Anmeldung gleich diese Mail,
+       * mit &_draft=1 einen Entwurf im Editor.
+       *
+       * Konfiguration (zz-bechtle.inc.php):
+       *   $$config['bechtle_demo_password'] = '...';
+       *   $$config['bechtle_demo_accounts'] = ['sekretariat' => 'Sekretariat (Petra Lindner)', ...];
+       */
+      class bechtle_demo extends rcube_plugin
+      {
+          public function init()
+          {
+              $$this->add_hook('startup', [$$this, 'startup']);
+              $$this->add_hook('authenticate', [$$this, 'authenticate']);
+              $$this->add_hook('template_object_loginform', [$$this, 'loginform']);
+              $$this->add_hook('login_after', [$$this, 'login_after']);
+
+              // Ein Knopf "Konto wechseln" in der Seitenleiste jeder angemeldeten
+              // Seite; er fuehrt auf den nackten Einstieg (./), und der zeigt die
+              // Kontowahl (siehe startup). Die Beschriftung kommt ohne eigene
+              // Sprachdatei aus: das Plugin ist eine einzelne Datei.
+              $$rcmail = rcmail::get_instance();
+              if ($$rcmail->output && $$rcmail->output->type == 'html' && $$rcmail->task != 'login') {
+                  $$rcmail->load_language(null, ['bechtledemoswitch' => 'Konto wechseln']);
+                  $$this->add_button([
+                      'type'       => 'link',
+                      'href'       => './',
+                      'label'      => 'bechtledemoswitch',
+                      'title'      => 'bechtledemoswitch',
+                      'class'      => 'button bechtle-demo-switch',
+                      'innerclass' => 'inner',
+                  ], 'taskbar');
+              }
+          }
+
+          // Der nackte Einstieg: GET ./ ohne jeden Parameter. Roundcube selbst
+          // haengt an jeden eigenen Link ?_task=... an (auch die Weiterleitung nach
+          // der Anmeldung und das Neuladen), also erreicht nur die Kachel der Box,
+          // ein Lesezeichen auf die Startseite oder "Konto wechseln" diese Adresse.
+          private function bare_entry()
+          {
+              return ($$_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && empty($$_GET) && empty($$_POST);
+          }
+
+          private function wanted()
+          {
+              $$user = rcube_utils::get_input_value('_demo', rcube_utils::INPUT_GET);
+              $$accounts = rcmail::get_instance()->config->get('bechtle_demo_accounts', []);
+              return ($$user && isset($$accounts[$$user])) ? $$user : null;
+          }
+
+          public function startup($$args)
+          {
+              // ?_demo=<konto> wird zur Anmeldung, egal ob jemand angemeldet ist.
+              // index.php beendet eine alte Sitzung nur bei einem gueltigen
+              // Formular-Token, also hier selbst: sonst bliebe der Sitzungsstand
+              // des vorigen Kontos (Ordnerliste, Cache) unter dem neuen liegen.
+              if ($$this->wanted() !== null) {
+                  $$rcmail = rcmail::get_instance();
+                  if ($$rcmail->user && $$rcmail->user->ID) {
+                      $$rcmail->kill_session();
+                  }
+                  $$args['task'] = 'login';
+                  $$args['action'] = 'login';
+              }
+              // Ohne ?_demo: der nackte Einstieg zeigt immer die Kontowahl, auch wenn
+              // das Cookie noch eine Sitzung traegt. Sonst oeffnet die Kachel nach
+              // dem ersten Klick nur noch das zuletzt benutzte Postfach, und die
+              // Knoepfe fuer die anderen Konten sind nicht mehr zu sehen.
+              elseif ($$this->bare_entry()) {
+                  $$rcmail = rcmail::get_instance();
+                  if ($$rcmail->user && $$rcmail->user->ID) {
+                      $$rcmail->kill_session();
+                  }
+                  $$args['task'] = 'login';
+                  $$args['action'] = '';
+              }
+              return $$args;
+          }
+
+          public function authenticate($$args)
+          {
+              $$user = $$this->wanted();
+              if ($$user !== null) {
+                  $$rcmail = rcmail::get_instance();
+                  $$args['user'] = $$user;
+                  $$args['pass'] = (string) $$rcmail->config->get('bechtle_demo_password', '');
+                  // Kein Formular, also kein Anti-CSRF-Token und beim ersten Aufruf
+                  // noch kein Cookie: beides hier ausdruecklich erlauben.
+                  $$args['valid'] = true;
+                  $$args['cookiecheck'] = false;
+              }
+              return $$args;
+          }
+
+          // ?_demo=<konto>&_mbox=<ordner>&_uid=<uid> oeffnet nach der Anmeldung
+          // genau diese Mail statt des Posteingangs: der Knopf "In Roundcube
+          // oeffnen" der App Postfach im Chat fuehrt so direkt auf eine Mail.
+          // Mit &_draft=1 dazu oeffnet sich ein Entwurf gleich im Editor (der
+          // Link, den der Agent nach post_entwurf_* nennt).
+          public function login_after($$args)
+          {
+              if ($$this->wanted() === null) {
+                  return $$args;
+              }
+              $$uid = rcube_utils::get_input_value('_uid', rcube_utils::INPUT_GET);
+              $$mbox = rcube_utils::get_input_value('_mbox', rcube_utils::INPUT_GET, true);
+              if (is_string($$uid) && ctype_digit($$uid) && is_string($$mbox) && $$mbox !== '') {
+                  if (rcube_utils::get_input_value('_draft', rcube_utils::INPUT_GET) === '1') {
+                      return ['_task' => 'mail', '_action' => 'compose', '_draft_uid' => $$uid, '_mbox' => $$mbox];
+                  }
+                  return ['_task' => 'mail', '_action' => 'show', '_mbox' => $$mbox, '_uid' => $$uid];
+              }
+              return $$args;
+          }
+
+          public function loginform($$args)
+          {
+              $$accounts = rcmail::get_instance()->config->get('bechtle_demo_accounts', []);
+              if (!$$accounts) {
+                  return $$args;
+              }
+              $$html = '<div class="bechtle-demo" style="margin-top:1.5em">'
+                  . '<p class="text-muted" style="margin-bottom:.5em">Demo: direkt anmelden als</p>';
+              foreach ($$accounts as $$user => $$label) {
+                  $$html .= '<a class="btn btn-secondary btn-block" style="margin-bottom:.4em" href="./?_demo='
+                      . rcube::Q($$user) . '">' . rcube::Q($$label) . '</a>';
+              }
+              $$html .= '</div>';
+              $$args['content'] .= $$html;
+              return $$args;
+          }
+      }
+networks:
+  default:
+  # Von der Plattform bereitgestelltes gemeinsames Netz (app-integration.md,
+  # "Platform contract"): darüber erreicht der Schulpost-Sidecar der App
+  # bechtle-chat den Mailserver unter bechtle-mail-server:143 und :25.
+  llm:
+    name: llm
