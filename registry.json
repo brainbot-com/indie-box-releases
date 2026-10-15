@@ -1036,7 +1036,7 @@
           "secret": true
         },
         {
-          "description": "Damit melden Sie sich nach der Installation als \u201eadmin\u201c an und legen in der Konfiguration die Zug\u00e4nge f\u00fcr alle anderen an. Vor dem Speichern notieren. Gilt nur f\u00fcr die erste Anmeldung: Passw\u00f6rter \u00e4ndern Sie danach in der App, nicht hier.",
+          "description": "Damit melden Sie sich nach der Installation als \u201eadmin\u201c an und legen in der Konfiguration die Zug\u00e4nge f\u00fcr alle anderen an. Vor dem Speichern notieren. Passw\u00f6rter \u00e4ndern Sie danach in der App. Nur f\u00fcr den Notfall, wenn kein Admin mehr hineinkommt: hier einen neuen Wert eintragen und die App neu starten, dann meldet sich \u201eadmin\u201c mit diesem Passwort an und setzt gleich ein eigenes.",
           "generate": "alnum:20",
           "label": "Passwort f\u00fcr den ersten Zugang",
           "name": "LEAD_PROFILE_ADMIN_PASSWORD",
@@ -1097,6 +1097,12 @@
           "compose_sha256": "1be5ca62e2eed7117214ea7d18898163ba06c358d72d2380cedf3d9611ccc26d",
           "released_at": "2026-10-07T13:59:29Z",
           "version": "0.6.0"
+        },
+        {
+          "compose_path": "apps/lead-profile/0.9.0/compose.yml",
+          "compose_sha256": "d1ce97c9c920ef97914b1e69353a5ee37fd07f927bb85f89b50460e26b1e7a8c",
+          "released_at": "2026-10-13T17:58:00Z",
+          "version": "0.9.0"
         }
       ]
     },
