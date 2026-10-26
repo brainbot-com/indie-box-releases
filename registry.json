@@ -1175,6 +1175,12 @@
           "compose_sha256": "289e3366d05206ee928933ce11e5d4298e2c081e92df6d8b2fac9e0ac2a6e150",
           "released_at": "2026-10-24T14:40:09Z",
           "version": "0.14.0"
+        },
+        {
+          "compose_path": "apps/lead-profile/0.15.0/compose.yml",
+          "compose_sha256": "312998cbd6fe7554f1eb16f19df4a31663c1bbdc0dadd4c302e2b213c7d22397",
+          "released_at": "2026-10-26T13:29:28Z",
+          "version": "0.15.0"
         }
       ]
     },
