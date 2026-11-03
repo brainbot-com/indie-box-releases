@@ -902,6 +902,12 @@
           "compose_sha256": "bba0f04368e1b856bbf20b31b0c87a590cf57af7876a2f902e6bf654015294ee",
           "released_at": "2026-10-22T19:07:00Z",
           "version": "0.1.10"
+        },
+        {
+          "compose_path": "apps/indie-chat/0.1.12/compose.yml",
+          "compose_sha256": "f27ead09a08f5c8eff5e954d863d855a75caf138c90e2bb4f03c563a57c416e8",
+          "released_at": "2026-11-03T17:31:50Z",
+          "version": "0.1.12"
         }
       ]
     },
