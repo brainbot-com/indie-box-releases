@@ -1227,6 +1227,64 @@
       ]
     },
     {
+      "audience": [],
+      "description": "Workflow-Automatisierung: verbindet Dienste, Webhooks und die eigenen Modelle der Box per Drag-and-drop zu Abl\u00e4ufen.",
+      "icon": "topology-ring-3",
+      "id": "n8n",
+      "name": "n8n",
+      "scope": "public",
+      "variables": [
+        {
+          "description": "Encrypts the credentials n8n stores (API keys, passwords, OAuth tokens). Press Generate on the first install and keep a copy: without it, a restored backup cannot decrypt its credentials. Do not change it afterwards: n8n refuses to start with a key other than the one it first stored.",
+          "generate": "hex:32",
+          "label": "Encryption key",
+          "name": "N8N_ENCRYPTION_KEY",
+          "secret": true
+        },
+        {
+          "description": "Password of the app's internal PostgreSQL superuser. Only the app uses it; Generate makes a long random one. It is fixed when the database is first created, so do not change it afterwards. A box that ran the bundled n8n already has it, and it is filled in here.",
+          "generate": "alnum:32",
+          "label": "Database admin password",
+          "name": "N8N_POSTGRES_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Password of the database role n8n connects as. Only the app uses it; Generate makes a long random one. It is fixed when the database is first created, so do not change it afterwards. A box that ran the bundled n8n already has it, and it is filled in here.",
+          "generate": "alnum:32",
+          "label": "Database password (n8n)",
+          "name": "N8N_POSTGRES_NON_ROOT_PASSWORD",
+          "secret": true
+        },
+        {
+          "description": "Shared between n8n and its task-runner container, which runs the code of Code nodes. Only the app uses it; Generate makes one. Changing it later is harmless: both sides pick up the new value when the app restarts.",
+          "generate": "alnum:43",
+          "label": "Task runner token",
+          "name": "N8N_RUNNERS_AUTH_TOKEN",
+          "secret": true
+        },
+        {
+          "description": "Time zone of Schedule triggers and date functions, as a tz database name (e.g. Europe/Vienna). Leave empty for: Europe/Berlin",
+          "label": "Time zone",
+          "name": "N8N_TIMEZONE",
+          "required": false
+        },
+        {
+          "description": "Only when outside services (GitHub, Stripe, a form on your website) have to reach this box's webhooks through a tunnel or reverse proxy: the HTTPS address that forwards to this app, e.g. https://hooks.example.com/. Leave empty to use the box's own address, which n8n derives from the box's HTTPS settings. After changing those settings, press Save here once so n8n picks the new address up.",
+          "label": "Public webhook URL",
+          "name": "N8N_PUBLIC_URL",
+          "required": false
+        }
+      ],
+      "versions": [
+        {
+          "compose_path": "apps/n8n/2.47.3/compose.yml",
+          "compose_sha256": "0cace26b74950dc3355725a5a370e9dd91a986ee1937d4a29673ceabe3dd5814",
+          "released_at": "2026-11-10T12:00:00Z",
+          "version": "2.47.3"
+        }
+      ]
+    },
+    {
       "audience": [
         "793eed2ea7811b63310ed9e20a2dfba9a8488063cf70a9271b002441c2835b11",
         "9c9d7eb1ff3a999561cb7d4760cdd85228f9470734ed701a58ded4453ef57679"
