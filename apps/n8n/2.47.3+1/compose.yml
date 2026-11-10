@@ -1,0 +1,343 @@
+# n8n, the workflow automation tool, as an Indie Box app.
+#
+# Upstream: https://github.com/n8n-io/n8n (images n8nio/n8n and n8nio/runners).
+# Nothing here is built: this file only re-packages n8n's own images for the
+# box. See brainbot-com/indie-box docs/app-integration.md: an app is a Compose
+# file whose ONE labelled service gets a landing-page card, a public port from
+# the reserved 9200-9249 range, and a gateway route. Only this file is
+# uploaded, so every bind mount is an absolute path under the box's data dir
+# and the one helper script (the database's first-start user setup) is inlined
+# as a Compose config at the bottom.
+#
+# Four services, one card:
+#
+#   gateway (:92xx) -> n8n (:5678)   editor, REST API, webhooks, forms
+#                      n8n-runners   runs Code-node JavaScript and Python in
+#                                    its own container (n8n's "external mode")
+#                      n8n-db        PostgreSQL 16
+#                      n8n-init      one-shot: hands the data dirs to n8n's uid
+#
+# Continuity with the bundled n8n (indie-box <= 0.7.x shipped n8n in the
+# release; 0.8.0 removed it and left its data on disk): the database lives in
+# the same directory (<data>/n8n-db), the file area in the same <data>/n8n-files,
+# and the two database passwords are the same .env keys
+# (N8N_POSTGRES_PASSWORD, N8N_POSTGRES_NON_ROOT_PASSWORD) with the same
+# database, user and role names. On such a box the install form comes up
+# with both passwords already filled in from the .env, and n8n starts on the
+# old database, migrating it forward. One thing could not be carried over:
+# the bundled n8n kept its credential encryption key inside the container,
+# which the 0.8.0 update removed, so credentials saved back then have to be
+# entered again. Workflows, executions and users are all in the database and
+# come back as they were. The address does change: the bundled n8n had port
+# 5678, an installed app gets one from 9200-9249.
+#
+# Versioning: indiebox.app.version is n8n's own version, and every n8n image
+# below (n8n, n8n-init, n8n-runners) is pinned to that same tag: n8nio/runners
+# must match n8nio/n8n exactly. The version follows n8n's `stable` channel,
+# not `latest`/`next`. Change the three tags and the label together, then add
+# the version to the registry entry in brainbot-com/indie-box. A change to
+# this file alone adds a packaging revision instead: 2.47.3 -> 2.47.3+1 ->
+# 2.47.3+2, back to none with the next n8n version.
+
+services:
+
+  # ---- the app: the ONE labelled service, so the ONE gateway route -----------
+  n8n:
+    image: n8nio/n8n:2.47.3
+    # "stable" normally; "encrypted" on boxes with encrypted storage, which
+    # makes this wait for the unlock. Workflows and credentials are company
+    # data, so every service of the app follows the box's storage mode.
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    labels:
+      indiebox.app.name: "n8n"
+      # From the list in indie-box dashboard/frontend/src/services/appIcons.ts;
+      # the icon the bundled n8n had.
+      indiebox.app.icon: "topology-ring-3"
+      # Short catalog description (registry sync reads it off this label).
+      indiebox.app.description: "Workflow-Automatisierung: verbindet Dienste, Webhooks und die eigenen Modelle der Box per Drag-and-drop zu Abläufen."
+      # The port INSIDE the container. The gateway forwards the app's public
+      # port here; the app never publishes a host port itself.
+      indiebox.app.http-port: "5678"
+      # A LITERAL, never interpolated: the box reads this label straight off
+      # the installed file to report the running version. The image tags
+      # above and below, plus +N for a revision of this packaging.
+      indiebox.app.version: "2.47.3+1"
+
+      # ---- the values the operator supplies (docs/app-integration.md,
+      #      "Required variables") ------------------------------------------
+      # Each <NAME> is exactly the variable interpolated as ${<NAME>} below;
+      # its value lives once in the box's shared .env.
+      # NB `required` defaults to TRUE, so every optional one says so.
+      # NB a declared `.default` is PERSISTED to the .env at install and then
+      # outranks the fallback here forever, so only N8N_TIMEZONE has one: it
+      # is the operator's own setting, prefilled so the form shows it. The
+      # other optional ones name their fallback in the description instead.
+      indiebox.app.var.N8N_ENCRYPTION_KEY.label: "Encryption key"
+      indiebox.app.var.N8N_ENCRYPTION_KEY.description: "Encrypts the credentials n8n stores (API keys, passwords, OAuth tokens). Press Generate on the first install and keep a copy: without it, a restored backup cannot decrypt its credentials. Do not change it afterwards: n8n refuses to start with a key other than the one it first stored."
+      indiebox.app.var.N8N_ENCRYPTION_KEY.secret: "true"
+      indiebox.app.var.N8N_ENCRYPTION_KEY.generate: "hex:32"
+
+      indiebox.app.var.N8N_POSTGRES_PASSWORD.label: "Database admin password"
+      indiebox.app.var.N8N_POSTGRES_PASSWORD.description: "Password of the app's internal PostgreSQL superuser. Only the app uses it; Generate makes a long random one. It is fixed when the database is first created, so do not change it afterwards. A box that ran the bundled n8n already has it, and it is filled in here."
+      indiebox.app.var.N8N_POSTGRES_PASSWORD.secret: "true"
+      # Letters and digits: the value is handed to Postgres and psql, where
+      # anything else would need quoting.
+      indiebox.app.var.N8N_POSTGRES_PASSWORD.generate: "alnum:32"
+
+      indiebox.app.var.N8N_POSTGRES_NON_ROOT_PASSWORD.label: "Database password (n8n)"
+      indiebox.app.var.N8N_POSTGRES_NON_ROOT_PASSWORD.description: "Password of the database role n8n connects as. Only the app uses it; Generate makes a long random one. It is fixed when the database is first created, so do not change it afterwards. A box that ran the bundled n8n already has it, and it is filled in here."
+      indiebox.app.var.N8N_POSTGRES_NON_ROOT_PASSWORD.secret: "true"
+      indiebox.app.var.N8N_POSTGRES_NON_ROOT_PASSWORD.generate: "alnum:32"
+
+      indiebox.app.var.N8N_RUNNERS_AUTH_TOKEN.label: "Task runner token"
+      indiebox.app.var.N8N_RUNNERS_AUTH_TOKEN.description: "Shared between n8n and its task-runner container, which runs the code of Code nodes. Only the app uses it; Generate makes one. Changing it later is harmless: both sides pick up the new value when the app restarts."
+      indiebox.app.var.N8N_RUNNERS_AUTH_TOKEN.secret: "true"
+      indiebox.app.var.N8N_RUNNERS_AUTH_TOKEN.generate: "alnum:43"
+
+      indiebox.app.var.N8N_TIMEZONE.label: "Time zone"
+      indiebox.app.var.N8N_TIMEZONE.description: "Time zone of Schedule triggers and date functions, as a tz database name (e.g. Europe/Vienna). Left empty, n8n uses Europe/Berlin too."
+      indiebox.app.var.N8N_TIMEZONE.required: "false"
+      indiebox.app.var.N8N_TIMEZONE.default: "Europe/Berlin"
+
+      indiebox.app.var.N8N_PUBLIC_URL.label: "Public webhook URL"
+      indiebox.app.var.N8N_PUBLIC_URL.description: "Optional, and normally not needed: leave it empty and n8n uses the box's own address. Fill it in only when outside services (GitHub, Stripe, a form on your website) have to reach this box's webhooks through a tunnel or reverse proxy: the HTTPS address that forwards to this app, e.g. https://hooks.example.com/. After changing the box's HTTPS settings, press Save here once so n8n picks the new address up."
+      indiebox.app.var.N8N_PUBLIC_URL.required: "false"
+    environment:
+      # ---- database: the app's own Postgres, as the bundled n8n had it ------
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: n8n-db
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: ${N8N_POSTGRES_DB:-n8n}
+      DB_POSTGRESDB_USER: ${N8N_POSTGRES_NON_ROOT_USER:-n8n}
+      DB_POSTGRESDB_PASSWORD: ${N8N_POSTGRES_NON_ROOT_PASSWORD:?set N8N_POSTGRES_NON_ROOT_PASSWORD in the box .env}
+
+      # ---- secrets and settings ----------------------------------------------
+      # Set explicitly rather than left to n8n, which would generate one into
+      # /home/node/.n8n/config: the .env keeps it next to the other secrets,
+      # and the operator has a copy for a restore.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in the box .env}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      GENERIC_TIMEZONE: ${N8N_TIMEZONE:-Europe/Berlin}
+      TZ: ${N8N_TIMEZONE:-Europe/Berlin}
+      # The Read/Write Files from Disk node may only touch /files, the
+      # bundled n8n's file area (<data>/n8n-files). n8n 2.x would otherwise
+      # restrict it to ~/.n8n-files, a directory nobody can reach.
+      N8N_RESTRICT_FILE_ACCESS_TO: /files
+
+      # ---- behind the box's gateway -------------------------------------------
+      # IPv4, which every Docker network has. n8n's default, '::', exists only
+      # where the container has IPv6, and n8n exits at once without it.
+      N8N_LISTEN_ADDRESS: 0.0.0.0
+      # The gateway (Caddy) is one proxy hop and sets X-Forwarded-*.
+      N8N_PROXY_HOPS: "1"
+      # The inputs the entrypoint below builds N8N_EDITOR_BASE_URL and
+      # N8N_WEBHOOK_URL from, all kept in the box's .env by docker-controller:
+      # the primary hostname, whether the gateway serves HTTPS, and the public
+      # port it gave this app.
+      INDIEBOX_PRIMARY_HOSTNAME: ${GATEWAY_PRIMARY_HOSTNAME:-}
+      INDIEBOX_HOSTNAMES: ${GATEWAY_HOSTNAMES:-}
+      INDIEBOX_TLS_CONFIG: ${TLS_CONFIG:-}
+      INDIEBOX_PUBLIC_PORT: ${INDIEBOX_APP_PORT_N8N:-}
+      INDIEBOX_PUBLIC_URL: ${N8N_PUBLIC_URL:-}
+
+      # ---- Code nodes run in n8n-runners, not in this container -----------------
+      # n8n's recommended production setup ("external mode"): user code never
+      # runs in the process that holds the credentials, and Python Code nodes
+      # only work this way in n8n 2.x.
+      N8N_RUNNERS_MODE: external
+      N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?set N8N_RUNNERS_AUTH_TOKEN in the box .env}
+      N8N_NATIVE_PYTHON_RUNNER: "true"
+
+      # ---- nothing leaves the box unasked ----------------------------------------
+      # No usage telemetry to n8n. No "new version" banner either: updates
+      # come from the box's app catalog (Apps page), which an operator can act
+      # on, unlike n8n's own update instructions.
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+    # The image's entrypoint, with the public address worked out first.
+    # docker-controller's gateway renders this app's port as plain HTTP only
+    # when the box has no TLS setting and no configured hostname (or no
+    # hostname at all); otherwise it is HTTPS on the configured names, the
+    # primary one first. That is the rule below. n8n needs the address for
+    # the webhook and form URLs it shows and registers, for OAuth callbacks
+    # and for links in invitation emails.
+    entrypoint:
+      - tini
+      - --
+      - /bin/sh
+      - -euc
+      - |
+        scheme=http
+        if [ -n "$${INDIEBOX_PRIMARY_HOSTNAME:-}" ] && [ -n "$${INDIEBOX_TLS_CONFIG:-}$${INDIEBOX_HOSTNAMES:-}" ]; then
+          scheme=https
+        fi
+        box_url="$$scheme://$${INDIEBOX_PRIMARY_HOSTNAME:-localhost}$${INDIEBOX_PUBLIC_PORT:+:$$INDIEBOX_PUBLIC_PORT}/"
+        public_url="$${INDIEBOX_PUBLIC_URL:-$$box_url}"
+        case "$$public_url" in */) ;; *) public_url="$$public_url/" ;; esac
+        export N8N_EDITOR_BASE_URL="$$box_url"
+        export N8N_WEBHOOK_URL="$$public_url"
+        # A Secure cookie is never sent back over plain HTTP: login would
+        # loop on a box without HTTPS.
+        if [ "$$scheme" = http ]; then export N8N_SECURE_COOKIE=false; fi
+        unset INDIEBOX_PRIMARY_HOSTNAME INDIEBOX_HOSTNAMES INDIEBOX_TLS_CONFIG INDIEBOX_PUBLIC_PORT INDIEBOX_PUBLIC_URL
+        echo "indiebox: editor at $$N8N_EDITOR_BASE_URL, webhooks at $$N8N_WEBHOOK_URL"
+        exec /docker-entrypoint.sh "$$@"
+      - n8n-indiebox
+    volumes:
+      # n8n's home: the settings file, binary data of executions (n8n 2.x keeps
+      # it on disk), installed community nodes. New with the app; the bundled
+      # n8n did not persist it.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/n8n-data:/home/node/.n8n
+      # The file area of the Read/Write Files from Disk node; the bundled
+      # n8n's directory.
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/n8n-files:/files
+    healthcheck:
+      # Readiness, not /healthz: it also waits for the database connection and
+      # the migrations.
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:5678/healthz/readiness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # A first start on the bundled n8n's database migrates it forward
+      # across many releases.
+      start_period: 120s
+    # `default` is where the gateway reaches the app; `llm` is the box's
+    # shared network, where the box's Ollama answers as http://ollama:11434
+    # (n8n's Ollama credential, no API key needed) and other apps can call
+    # this app's webhooks as http://n8n:5678/webhook/...; `n8n` is the app's
+    # own, which the database and the runners sit on alone.
+    networks:
+      - default
+      - llm
+      - n8n
+    depends_on:
+      n8n-init:
+        condition: service_completed_successfully
+      n8n-db:
+        condition: service_healthy
+      # Refuses to start unless the encrypted volume is actually mounted.
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- the task runners: Code-node JavaScript and Python ----------------------
+  n8n-runners:
+    image: n8nio/runners:2.47.3
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?set N8N_RUNNERS_AUTH_TOKEN in the box .env}
+      GENERIC_TIMEZONE: ${N8N_TIMEZONE:-Europe/Berlin}
+      TZ: ${N8N_TIMEZONE:-Europe/Berlin}
+    healthcheck:
+      # The launcher's own health endpoint (N8N_RUNNERS_LAUNCHER_HEALTH_CHECK_PORT).
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:5680/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # Only the app's own network: the code it runs reaches n8n's broker and
+    # nothing else on the box.
+    networks:
+      - n8n
+    depends_on:
+      # Started, not healthy: the launcher retries until the broker answers,
+      # and waiting for health here would hold the install's `compose up`
+      # through a long first migration.
+      n8n:
+        condition: service_started
+
+  # ---- PostgreSQL ----------------------------------------------------------------
+  # Major version 16 is what the bundled n8n created its database with; a
+  # data directory only opens with the major version that wrote it. The
+  # Debian variant, as before (not -alpine), so the collation library does not
+  # change underneath the existing indexes.
+  n8n-db:
+    image: postgres:16.15
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: always
+    # Paused while a backup or restore runs, so the data files are captured
+    # consistently.
+    labels:
+      indiebox.pause-for-backup: "true"
+    environment:
+      POSTGRES_USER: ${N8N_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${N8N_POSTGRES_PASSWORD:?set N8N_POSTGRES_PASSWORD in the box .env}
+      POSTGRES_DB: ${N8N_POSTGRES_DB:-n8n}
+      # Read by the init script below on the first start only.
+      POSTGRES_NON_ROOT_USER: ${N8N_POSTGRES_NON_ROOT_USER:-n8n}
+      POSTGRES_NON_ROOT_PASSWORD: ${N8N_POSTGRES_NON_ROOT_PASSWORD:?set N8N_POSTGRES_NON_ROOT_PASSWORD in the box .env}
+    configs:
+      - source: n8n-db-init
+        target: /docker-entrypoint-initdb.d/init-data.sh
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/n8n-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - n8n
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+  # ---- one-shot: data dir ownership ------------------------------------------------
+  # A bind mount starts out owned by root, and n8n runs as uid 1000 (`node`).
+  # n8n's own image, so nothing extra to pull; a no-op once the directories
+  # are right. Postgres needs none of this: its entrypoint fixes its own dir.
+  n8n-init:
+    image: n8nio/n8n:2.47.3
+    profiles:
+      - ${SECURE_STORAGE_PROFILE:-stable}
+    restart: "no"
+    user: "0"
+    entrypoint: ["/bin/sh", "-euc"]
+    command:
+      - |
+        for d in /home/node/.n8n /files; do
+          [ "$$(stat -c %u:%g "$$d")" = 1000:1000 ] || chown -R 1000:1000 "$$d"
+        done
+    network_mode: none
+    volumes:
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/n8n-data:/home/node/.n8n
+      - ${SECURE_STORAGE_DIR:-${DATA_DIR:-/data}}/n8n-files:/files
+    depends_on:
+      secure-gate:
+        condition: service_completed_successfully
+
+configs:
+  # n8n's reference setup (n8n-io/n8n-hosting, docker-compose/withPostgres):
+  # n8n connects as an ordinary role that owns nothing but its database,
+  # not as the superuser. Runs only when the data directory is empty, so a
+  # box with the bundled n8n's database never runs it. psql's :"name" and
+  # :'value' quote the role name and password, whatever they contain.
+  # Outside Swarm a config cannot be made executable, so the Postgres
+  # entrypoint SOURCES this file: no `set` or `exit` here, they would leak
+  # into the entrypoint. A failing psql still aborts it (it runs `set -e`).
+  n8n-db-init:
+    content: |
+      psql -v ON_ERROR_STOP=1 \
+        --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" \
+        --set "role=$$POSTGRES_NON_ROOT_USER" \
+        --set "password=$$POSTGRES_NON_ROOT_PASSWORD" \
+        --set "db=$$POSTGRES_DB" <<'EOSQL'
+      CREATE USER :"role" WITH PASSWORD :'password';
+      GRANT ALL PRIVILEGES ON DATABASE :"db" TO :"role";
+      GRANT CREATE ON SCHEMA public TO :"role";
+      EOSQL
+
+networks:
+  default:
+  # The app's own network: the database and the runners are reachable from
+  # nothing else.
+  n8n:
+  # Platform-provided shared network (app-integration.md "Platform contract").
+  llm:
+    name: llm

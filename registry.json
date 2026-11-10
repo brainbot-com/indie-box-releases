@@ -1263,13 +1263,14 @@
           "secret": true
         },
         {
-          "description": "Time zone of Schedule triggers and date functions, as a tz database name (e.g. Europe/Vienna). Leave empty for: Europe/Berlin",
+          "default": "Europe/Berlin",
+          "description": "Time zone of Schedule triggers and date functions, as a tz database name (e.g. Europe/Vienna). Left empty, n8n uses Europe/Berlin too.",
           "label": "Time zone",
           "name": "N8N_TIMEZONE",
           "required": false
         },
         {
-          "description": "Only when outside services (GitHub, Stripe, a form on your website) have to reach this box's webhooks through a tunnel or reverse proxy: the HTTPS address that forwards to this app, e.g. https://hooks.example.com/. Leave empty to use the box's own address, which n8n derives from the box's HTTPS settings. After changing those settings, press Save here once so n8n picks the new address up.",
+          "description": "Optional, and normally not needed: leave it empty and n8n uses the box's own address. Fill it in only when outside services (GitHub, Stripe, a form on your website) have to reach this box's webhooks through a tunnel or reverse proxy: the HTTPS address that forwards to this app, e.g. https://hooks.example.com/. After changing the box's HTTPS settings, press Save here once so n8n picks the new address up.",
           "label": "Public webhook URL",
           "name": "N8N_PUBLIC_URL",
           "required": false
@@ -1281,6 +1282,12 @@
           "compose_sha256": "0cace26b74950dc3355725a5a370e9dd91a986ee1937d4a29673ceabe3dd5814",
           "released_at": "2026-11-10T12:00:00Z",
           "version": "2.47.3"
+        },
+        {
+          "compose_path": "apps/n8n/2.47.3+1/compose.yml",
+          "compose_sha256": "733cbf10be16acdb40bfbc4fbd42fe2966f1535b3cd15ef8b8d6e8f08e1fd2bd",
+          "released_at": "2026-11-10T15:03:40Z",
+          "version": "2.47.3+1"
         }
       ]
     },
